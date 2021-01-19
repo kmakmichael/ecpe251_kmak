@@ -13,7 +13,7 @@ CFLAGS=-c -Wall -O3
 HEADERS=image_template.h
 
 # All of the object files to produce as intermediary work
-OBJECTS=canny_stage1.o
+OBJECTS=main.o
 
 # The final program to build
 EXECUTABLE=canny_stage1
