@@ -25,11 +25,12 @@ typedef struct {
     uint8_t **data;
     int width;
     int height;
-} img_s;
+} matrix_s;
 
 int main(int argc, char *argv[]) {
 
-    img_s image;
+    matrix_s image;
+    matrix_s kern;
     float sigma;
 
     if (argc != 3) {
