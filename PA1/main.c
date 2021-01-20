@@ -8,12 +8,18 @@
     quick description...
 */
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-result"
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wint-to-pointer-cast"
 
 #include "stdio.h"
 #include "stdlib.h"
 #include "inttypes.h"
 
 #include "image_template.h"
+
+#pragma GCC diagnostic pop
 
 typedef struct {
     uint8_t **data;
