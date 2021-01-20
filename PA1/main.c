@@ -35,7 +35,8 @@ typedef struct {
 } kern_s;
 
 // functions
-void gaussian_kernel(kern_s *kern, float sigma);
+void gaussian_kern(kern_s *kern, float sigma);
+void gaussian_deriv(kern_s *kern, float sigma);
 
 
 int main(int argc, char *argv[]) {
@@ -44,6 +45,8 @@ int main(int argc, char *argv[]) {
     float sigma;
     kern_s h_kern;
     kern_s v_kern;
+    kern_s h_deriv;
+    kern_s v_deriv;
 
     if (argc != 3) {
         fprintf(stderr, "usage: canny_stage1 <image path> <sigma>\n");
@@ -55,8 +58,12 @@ int main(int argc, char *argv[]) {
     }
 
     read_image_template(argv[1], &image.data, &image.width, &image.height);
-    gaussian_kernel(&h_kern, sigma);
-    gaussian_kernel(&v_kern, sigma);
+
+    gaussian_kern(&h_kern, sigma);
+    gaussian_kern(&v_kern, sigma);
+    // convolve v/h
+    gaussian_deriv(&h_deriv, sigma);
+    gaussian_deriv(&v_deriv, sigma);
 
     free(image.data);
     return 0;
@@ -76,5 +83,27 @@ void gaussian_kern(kern_s *kern, float sigma) {
     }
     for (size_t i = 0; i < (kern->w - 1); i++) {
         kern->data[i] /= sum;
+    }
+}
+
+void gaussian_deriv(kern_s *kern, float sigma) {
+    uint8_t a = 2.5 * sigma; // add 0.5 and truncate instead of rounding, same result
+    kern->w = 2 * a + 1;
+    uint8_t sum = 0;
+
+    kern->data = (uint8_t*) calloc(kern->w, sizeof(uint8_t));
+
+    for (size_t i = 0; i < (kern->w - 1); i++) {
+        kern->data[i] = exp(-1 * (1-a) * (-1 * (i-a) * (i-a) / (2 * sigma * sigma)));
+        sum -= i * kern->data[i];
+    }
+    for (size_t i = 0; i < (kern->w - 1); i++) {
+        kern->data[i] /= sum;
+    }
+    // kernel flipping
+    for (size_t i = 0; i < (kern->w/2 - 1); i++) {
+        uint8_t temp = kern->data[kern->w - 1 - i];
+        kern->data[kern->w - 1 - i] = kern->data[i];
+        kern->data[i] = temp;
     }
 }
