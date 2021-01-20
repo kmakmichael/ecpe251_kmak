@@ -22,15 +22,14 @@
 #pragma GCC diagnostic pop
 
 typedef struct {
-    uint8_t **data;
+    uint8_t *data;
     int width;
     int height;
-} matrix_s;
+} img_s;
 
 int main(int argc, char *argv[]) {
 
-    matrix_s image;
-    matrix_s kern;
+    img_s image;
     float sigma;
 
     if (argc != 3) {
@@ -43,6 +42,7 @@ int main(int argc, char *argv[]) {
     }
 
     read_image_template(argv[1], &image.data, &image.width, &image.height);
-    
+
+    free(image.data);
     return 0;
 }
