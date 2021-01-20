@@ -8,13 +8,22 @@
     quick description...
 */
 
+
 #include "stdio.h"
 #include "stdlib.h"
 #include "inttypes.h"
 
+#include "image_template.h"
+
+typedef struct {
+    uint8_t **data;
+    int width;
+    int height;
+} img_s;
+
 int main(int argc, char *argv[]) {
 
-    char *img_path;
+    img_s image;
     float sigma;
 
     if (argc != 3) {
@@ -25,6 +34,8 @@ int main(int argc, char *argv[]) {
     if (sigma <= 0) {
         fprintf(stderr, "invalid sigma: %s\n", argv[2]);
     }
+
+    read_image_template(argv[1], &image.data, &image.width, &image.height);
     
     return 0;
 }
