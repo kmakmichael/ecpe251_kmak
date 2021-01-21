@@ -105,7 +105,7 @@ int main(int argc, char *argv[]) {
     gettimeofday(&end, NULL);
 
     float runtime = (end.tv_sec * 1000000 + end.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec);
-    printf("Runtime: %f seconds\n", runtime / 1000000.0);
+    printf("Runtime: %f ms\n", runtime / 1000.0);
 
     write_image_template("output/temp_hori.pgm", temp_hori.data, temp_hori.width, temp_hori.height);
     write_image_template("output/hori.pgm", hori.data, hori.width, hori.height);
