@@ -29,20 +29,19 @@ void write_image_template(char *name, T *image, int im_width, int im_height);
 template <class T>
 void read_image_template(char *name, T **image, int *im_width, int *im_height)
 {
-        unsigned char *temp_img;
-
+	unsigned char *temp_img;
 	int i;
 
-        read_image(name, &temp_img, im_width, im_height);
+	read_image(name, &temp_img, im_width, im_height);
 
-        *image=(T *)malloc(sizeof(int)*(*im_width)*(*im_height));
+	*image=(T *)malloc(sizeof(int)*(*im_width)*(*im_height));
 
 
-        for(i=0;i<(*im_width)*(*im_height);i++)
-        {
-                (*image)[i]=(T)temp_img[i];
-        }
-        free(temp_img);
+	for(i=0;i<(*im_width)*(*im_height);i++)
+	{
+		(*image)[i]=(T)temp_img[i];
+	}
+	free(temp_img);
 }
 
 void read_image(char *name, unsigned char **image, int *im_width, int *im_height)
@@ -85,36 +84,35 @@ template <class T>
 void write_image_template(char *name, T *image, int im_width, int im_height)
 {
 	int i;
-        unsigned char *temp_img=(unsigned char*)malloc(sizeof(unsigned char)*im_width*im_height);
-        for(i=0;i<(im_width*im_height);i++)
-        {
-                temp_img[i]=(unsigned char)image[i];
-        }
-        write_image(name,temp_img,im_width,im_height);
+	unsigned char *temp_img=(unsigned char*)malloc(sizeof(unsigned char)*im_width*im_height);
+	for(i=0;i<(im_width*im_height);i++)
+	{
+		temp_img[i]=(unsigned char)image[i];
+	}
+	write_image(name,temp_img,im_width,im_height);
 
-        free(temp_img);
+	free(temp_img);
 }
 
 template <class T>
 void write_img_template(char *name, T *image,int im_width,int im_height)
 {
+	int i,j;
+	FILE *fop;
+	int im_size=im_width*im_height;
 
-int i,j;
-FILE *fop;
-int im_size=im_width*im_height;
+	//fop=fopen(name,"w+");
+	//fwrite(image,sizeof(T),im_size,fop);
 
-//fop=fopen(name,"w+");
-//fwrite(image,sizeof(T),im_size,fop);
+	printf("%d\n%d\n",im_width,im_height);
+	for(i=0;i<im_height;i++)
+	{
+	//printf("\n");
+	for(j=0;j<im_width;j++)
+		printf("%f\n",image[i*im_width+j]);
+	}
 
-printf("%d\n%d\n",im_width,im_height);
-for(i=0;i<im_height;i++)
-{
-//printf("\n");
-for(j=0;j<im_width;j++)
-	printf("%f\n",image[i*im_width+j]);
-}
-
-//fclose(fop);
+	//fclose(fop);
 } 
 
 void write_image(char *name, unsigned char *image, int im_width, int im_height)
