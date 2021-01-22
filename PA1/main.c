@@ -8,11 +8,6 @@
     quick description...
 */
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-result"
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wint-to-pointer-cast"
-
 #include "stdio.h"
 #include "stdlib.h"
 #include "inttypes.h"
@@ -20,8 +15,6 @@
 #include "sys/time.h"
 
 #include "image_template.h"
-
-#pragma GCC diagnostic pop
 
 // structs
 typedef struct {
@@ -38,11 +31,9 @@ typedef struct {
 // functions
 void gaussian_kern(kern_s *kern, float sigma, float a);
 void gaussian_deriv(kern_s *kern, float sigma, float a);
-void convolution(img_s *image, const kern_s *h_kern, const kern_s *v_kern);
-void img_copy(const img_s *orig, img_s *cpy);
+void img_prep(const img_s *orig, img_s *cpy);
 void h_conv(img_s *in_img, img_s *out_img, const kern_s *kern);
 void v_conv(img_s *in_img, img_s *out_img, const kern_s *kern);
-void print_img(img_s *image);
 
 
 int main(int argc, char *argv[]) {
@@ -53,13 +44,10 @@ int main(int argc, char *argv[]) {
     img_s hori;
     img_s magnitude;
     img_s direction;
+    kern_s kern;
+    struct timeval start, end;
     float sigma;
     float a;
-    kern_s kern;
-    //kern_s v_kern;
-    //kern_s h_deriv;
-    //kern_s v_deriv;
-    struct timeval start, end;
 
     if (argc != 3) {
         fprintf(stderr, "usage: canny_stage1 <image path> <sigma>\n");
@@ -71,11 +59,11 @@ int main(int argc, char *argv[]) {
     }
 
     read_image_template(argv[1], &image.data, &image.width, &image.height);
-    img_copy(&image, &temp);
-    img_copy(&image, &vert);
-    img_copy(&image, &hori);
-    img_copy(&image, &magnitude);
-    img_copy(&image, &direction);
+    img_prep(&image, &temp);
+    img_prep(&image, &vert);
+    img_prep(&image, &hori);
+    img_prep(&image, &magnitude);
+    img_prep(&image, &direction);
 
     // kernel initialization
     a = round(2.5 * sigma - 0.5);
@@ -119,6 +107,7 @@ int main(int argc, char *argv[]) {
 
 
     free(image.data);
+    free(temp.data);
     free(vert.data);
     free(hori.data);
     free(magnitude.data);
@@ -127,7 +116,7 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-void img_copy(const img_s *orig, img_s *cpy) {
+void img_prep(const img_s *orig, img_s *cpy) {
     cpy->height = orig->height;
     cpy->width = orig->width;
     cpy->data = (int *) calloc(cpy->height * cpy ->width, sizeof(int));
