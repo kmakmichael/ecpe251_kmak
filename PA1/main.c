@@ -18,7 +18,7 @@
 
 // structs
 typedef struct {
-    int *data;
+    int16_t *data;
     int width;
     int height;
 } img_s;
@@ -119,7 +119,7 @@ int main(int argc, char *argv[]) {
 void img_prep(const img_s *orig, img_s *cpy) {
     cpy->height = orig->height;
     cpy->width = orig->width;
-    cpy->data = (int *) calloc(cpy->height * cpy ->width, sizeof(int));
+    cpy->data = (int16_t *) calloc(cpy->height * cpy ->width, sizeof(int16_t));
 }
 
 void print_kern(kern_s *kern) {
@@ -193,6 +193,9 @@ void v_conv(img_s *in_img, img_s *out_img, const kern_s *kern) {
             if (i_off < bounds && i_off >= 0) {
                 sum += in_img->data[i_off] * kern->data[k];
             }
+        }
+        if (sum < -32700 || sum >= 32700) {
+            printf("float: %f, u8: %"PRId16"\n", sum, (int16_t) sum);
         }
         out_img->data[i] = sum;
     }
