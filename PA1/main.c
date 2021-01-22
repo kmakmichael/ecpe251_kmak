@@ -36,8 +36,8 @@ typedef struct {
 } kern_s;
 
 // functions
-void gaussian_kern(kern_s *kern, float sigma);
-void gaussian_deriv(kern_s *kern, float sigma);
+void gaussian_kern(kern_s *kern, float sigma, float a);
+void gaussian_deriv(kern_s *kern, float sigma, float a);
 void convolution(img_s *image, const kern_s *h_kern, const kern_s *v_kern);
 void img_copy(const img_s *orig, img_s *cpy);
 void h_conv(img_s *in_img, img_s *out_img, const kern_s *kern);
@@ -48,17 +48,17 @@ void print_img(img_s *image);
 int main(int argc, char *argv[]) {
 
     img_s image;
-    img_s temp_vert;
-    img_s temp_hori;
+    img_s temp;
     img_s vert;
     img_s hori;
     img_s magnitude;
     img_s direction;
     float sigma;
-    kern_s h_kern;
-    kern_s v_kern;
-    kern_s h_deriv;
-    kern_s v_deriv;
+    float a;
+    kern_s kern;
+    //kern_s v_kern;
+    //kern_s h_deriv;
+    //kern_s v_deriv;
     struct timeval start, end;
 
     if (argc != 3) {
@@ -71,35 +71,45 @@ int main(int argc, char *argv[]) {
     }
 
     read_image_template(argv[1], &image.data, &image.width, &image.height);
-    img_copy(&image, &temp_vert);
-    img_copy(&image, &temp_hori);
+    img_copy(&image, &temp);
     img_copy(&image, &vert);
     img_copy(&image, &hori);
     img_copy(&image, &magnitude);
     img_copy(&image, &direction);
 
-    write_image_template("output/original.pgm", image.data, image.width, image.height);
+    // kernel initialization
+    a = round(2.5 * sigma - 0.5);
+    kern.w = 2 * a + 1;
+    kern.data = (float*) calloc(kern.w, sizeof(float));
 
-    gaussian_kern(&h_kern, sigma);
-    gaussian_kern(&v_kern, sigma);
-    
-    gaussian_deriv(&h_deriv, sigma);
-    gaussian_deriv(&v_deriv, sigma);
-    
     // begin time
     gettimeofday(&start, NULL);
 
-    h_conv(&image, &temp_hori, &h_kern);
-    h_conv(&temp_hori, &hori, &h_deriv);
-    v_conv(&image, &temp_vert, &v_kern);
-    v_conv(&temp_vert, &vert, &v_deriv);
+    // horizontal
+    gaussian_kern(&kern, sigma, a);
+    h_conv(&image, &temp, &kern);
+    gaussian_deriv(&kern, sigma, a);
+    h_conv(&temp, &hori, &kern);
+    write_image_template("output/temp_hori.pgm", temp.data, temp.width, temp.height);
+    write_image_template("output/hori.pgm", hori.data, hori.width, hori.height);
 
+    // vertical
+    gaussian_kern(&kern, sigma, a);
+    v_conv(&image, &temp, &kern);
+    gaussian_deriv(&kern, sigma, a);
+    v_conv(&temp, &vert, &kern);
+    write_image_template("output/temp_vert.pgm", temp.data, temp.width, temp.height);
+    write_image_template("output/vert.pgm", vert.data, vert.width, vert.height);
+
+    // direction and magnitude
     for(size_t i = 0; i < image.height * image.width; i++) {
         magnitude.data[i] = sqrt((hori.data[i] * hori.data[i]) + (vert.data[i] * vert.data[i]));
     }
     for(size_t i = 0; i < image.height * image.width; i++) {
         direction.data[i] = atan2(hori.data[i], vert.data[i]);
     }
+    write_image_template("output/direction.pgm", direction.data, direction.width, direction.height);
+    write_image_template("output/magnitude.pgm", magnitude.data, magnitude.width, magnitude.height);
 
     // stop time
     gettimeofday(&end, NULL);
@@ -107,25 +117,13 @@ int main(int argc, char *argv[]) {
     float runtime = (end.tv_sec * 1000000 + end.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec);
     printf("Runtime: %f ms\n", runtime / 1000.0);
 
-    write_image_template("output/temp_hori.pgm", temp_hori.data, temp_hori.width, temp_hori.height);
-    write_image_template("output/hori.pgm", hori.data, hori.width, hori.height);
-    write_image_template("output/temp_vert.pgm", temp_vert.data, temp_vert.width, temp_vert.height);
-    write_image_template("output/vert.pgm", vert.data, vert.width, vert.height);
-    write_image_template("output/direction.pgm", direction.data, direction.width, direction.height);
-    write_image_template("output/magnitude.pgm", magnitude.data, magnitude.width, magnitude.height);
-
 
     free(image.data);
     free(vert.data);
     free(hori.data);
-    free(temp_vert.data);
-    free(temp_hori.data);
     free(magnitude.data);
     free(direction.data);
-    free(v_kern.data);
-    free(h_kern.data);
-    free(v_deriv.data);
-    free(h_deriv.data);
+    free(kern.data);
     return 0;
 }
 
@@ -142,9 +140,7 @@ void print_kern(kern_s *kern) {
     printf("\n");
 }
 
-void gaussian_kern(kern_s *kern, float sigma) {
-    float a = round(2.5 * sigma - 0.5); 
-    kern->w = 2 * a + 1;
+void gaussian_kern(kern_s *kern, float sigma, float a) {
     float sum = 0;
 
     kern->data = (float*) calloc(kern->w, sizeof(float));
@@ -158,9 +154,7 @@ void gaussian_kern(kern_s *kern, float sigma) {
     }
 }
 
-void gaussian_deriv(kern_s *kern, float sigma) {
-    float a = round(2.5 * sigma - 0.5);
-    kern->w = 2 * a + 1;
+void gaussian_deriv(kern_s *kern, float sigma, float a) {
     float sum = 0;
 
     kern->data = (float*) calloc(kern->w, sizeof(float));
