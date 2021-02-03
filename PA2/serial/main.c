@@ -79,16 +79,12 @@ int main(int argc, char *argv[]) {
     h_conv(&image, &temp, &kern);
     gaussian_deriv(&kern, sigma, a);
     h_conv(&temp, &hori, &kern);
-    write_image_template("output/temp_hori.pgm", temp.data, temp.width, temp.height);
-    write_image_template("output/hori.pgm", hori.data, hori.width, hori.height);
 
     // vertical
     gaussian_kern(&kern, sigma, a);
     v_conv(&image, &temp, &kern);
     gaussian_deriv(&kern, sigma, a);
     v_conv(&temp, &vert, &kern);
-    write_image_template("output/temp_vert.pgm", temp.data, temp.width, temp.height);
-    write_image_template("output/vert.pgm", vert.data, vert.width, vert.height);
 
     // direction and magnitude
     for(size_t i = 0; i < image.height * image.width; i++) {
