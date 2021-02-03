@@ -34,6 +34,7 @@ void gaussian_deriv(kern_s *kern, float sigma, float a);
 void img_prep(const img_s *orig, img_s *cpy);
 void h_conv(img_s *in_img, img_s *out_img, const kern_s *kern);
 void v_conv(img_s *in_img, img_s *out_img, const kern_s *kern);
+void suppression(img_s *direction, img_s *magnitude, img_s *out_img);
 
 
 int main(int argc, char *argv[]) {
@@ -98,6 +99,9 @@ int main(int argc, char *argv[]) {
     }
     write_image_template("output/direction.pgm", direction.data, direction.width, direction.height);
     write_image_template("output/magnitude.pgm", magnitude.data, magnitude.width, magnitude.height);
+
+    suppression(&direction, &magnitude, &temp);
+    write_image_template("output/suppression.pgm", temp.data, temp.width, temp.height);
 
     // stop time
     gettimeofday(&end, NULL);
@@ -196,4 +200,75 @@ void v_conv(img_s *in_img, img_s *out_img, const kern_s *kern) {
         }
         out_img->data[i] = sum;
     }
+}
+
+void suppression(img_s *direction, img_s *magnitude, img_s *out_img) {
+    #define Gxy magnitude->data
+    size_t bounds = direction->width * direction->height;
+    size_t width = magnitude->width;
+    size_t btm_right = width + 1;
+    size_t btm_left = width - 1;
+    float theta;
+    for (size_t i = 0; i < bounds; i++) {
+        theta = direction->data[i];
+        if (theta < 0) {
+            theta += M_PI;
+        }
+        theta *= (180.0 / M_PI);
+        out_img->data[i] = Gxy[i];
+        if (theta <= 22.5 || theta > 157.5) {
+            // top
+            if (i >= width) {
+                if (theta < Gxy[i - width]) {
+                    out_img->data[i] = 0;
+                }
+            }
+            // bottom
+            if (i < bounds - width) {
+                if (theta < Gxy[i + width]) {
+                    out_img->data[i] = 0;
+                }
+            }
+        } else if (theta > 22.5 && theta <= 67.5) {
+            //topleft
+            if (i >= width && i % width > 0) {
+                if (theta < Gxy[i - btm_right]) {
+                    out_img->data[i] = 0;
+                }
+            }
+            // bottomright
+            if (i < bounds - width && i % width < width-1) {
+                if (theta < Gxy[i + btm_right]) {
+                    out_img->data[i] = 0;
+                }
+            }
+        } else if (theta > 67.5 && theta <= 112.5) {
+            // left
+            if (i % width > 0) {
+                if (theta < Gxy[i - 1]) {
+                    out_img->data[i] = 0;
+                }
+            }
+            // right
+            if (i % width < width-1) {
+                if (theta < Gxy[i + 1]) {
+                    out_img->data[i] = 0;
+                }
+            }
+        } else if (theta > 112.5 && theta <= 157.5) {
+            // topright
+            if (i >= width && i % width < width-1) {
+                if (theta < magnitude->data[i - btm_left]) {
+                    out_img->data[i] = 0;
+                }
+            }
+            // bottomleft
+            if (i < bounds - width && i % width > 0) {
+                if (theta < magnitude->data[i + btm_left]) {
+                    out_img->data[i] = 0;
+                }
+            }
+        }
+    }
+    #undef Gxy
 }
