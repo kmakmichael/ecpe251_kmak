@@ -35,7 +35,9 @@ void img_prep(const img_s *orig, img_s *cpy);
 void h_conv(img_s *in_img, img_s *out_img, const kern_s *kern);
 void v_conv(img_s *in_img, img_s *out_img, const kern_s *kern);
 void suppression(img_s *direction, img_s *magnitude, img_s *out_img);
+void hyst(img_s *img);
 
+int sortcomp(const void *e1, const void *e2);
 
 int main(int argc, char *argv[]) {
 
@@ -98,6 +100,9 @@ int main(int argc, char *argv[]) {
 
     suppression(&direction, &magnitude, &temp);
     write_image_template("output/suppression.pgm", temp.data, temp.width, temp.height);
+
+    qsort(temp.data, temp.width * temp.height, sizeof(int16_t), sortcomp);
+    hyst(&temp);
 
     // stop time
     gettimeofday(&end, NULL);
@@ -267,4 +272,25 @@ void suppression(img_s *direction, img_s *magnitude, img_s *out_img) {
         }
     }
     #undef Gxy
+}
+
+void hyst(img_s *img) {
+    size_t bounds = img->height * img-> width;
+    int16_t t_high = img->data[bounds / 10];
+    int16_t t_low = t_high / 5.0;
+    for(size_t i = 0; i < bounds; i++) {
+        if (img->data[i] >= t_high) {
+            img->data[i] = 255;
+        } else if (img->data[i] <= t_low) {
+            img->data[i] = 0;
+        } else  {
+            img->data[i] = 125;
+        }
+    }
+}
+
+int sortcomp(const void *e1, const void *e2) {
+    int16_t *i1 = (int16_t *) e1;
+    int16_t *i2 = (int16_t *) e2;
+    return (int) (*i1 - *i2);
 }
