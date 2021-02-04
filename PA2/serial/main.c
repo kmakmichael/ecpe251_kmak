@@ -96,21 +96,20 @@ int main(int argc, char *argv[]) {
     for(size_t i = 0; i < image.height * image.width; i++) {
         direction.data[i] = atan2(hori.data[i], vert.data[i]);
     }
-    write_image_template("output/direction.pgm", direction.data, direction.width, direction.height);
-    write_image_template("output/magnitude.pgm", magnitude.data, magnitude.width, magnitude.height);
+    write_image_template("direction.pgm", direction.data, direction.width, direction.height);
+    write_image_template("magnitude.pgm", magnitude.data, magnitude.width, magnitude.height);
 
     // re-use vert as suppression and hori as hysteresis to save some memory so my VM can handle the bigger images
     suppression(&direction, &magnitude, &vert);
-    write_image_template("output/suppression.pgm", vert.data, vert.width, vert.height);
+    write_image_template("suppression.pgm", vert.data, vert.width, vert.height);
 
     memcpy(temp.data, vert.data, sizeof(float) * vert.height * vert.width);
     qsort(temp.data, temp.width * temp.height, sizeof(float), sortcomp);
     float t_high = temp.data[(size_t) (temp.height * temp.width * 0.9)];
     float t_low = t_high / 5.0;
     hyst(&vert, t_high, t_low);
-    write_image_template("output/pre-hyst.pgm", vert.data, vert.width, vert.height);
     edge_linking(&vert, &hori);
-    write_image_template("output/hysteresis.pgm", hori.data, hori.width, hori.height);
+    write_image_template("hysteresis.pgm", hori.data, hori.width, hori.height);
 
     // stop time
     gettimeofday(&end, NULL);
