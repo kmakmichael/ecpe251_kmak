@@ -105,7 +105,7 @@ int main(int argc, char *argv[]) {
 
     memcpy(temp.data, vert.data, sizeof(float) * vert.height * vert.width);
     qsort(temp.data, temp.width * temp.height, sizeof(float), sortcomp);
-    float t_high = temp.data[(size_t) (temp.height * temp.width * 0.95)];
+    float t_high = temp.data[(size_t) (temp.height * temp.width * 0.9)];
     float t_low = t_high / 5.0;
     hyst(&vert, t_high, t_low);
     write_image_template("output/pre-hyst.pgm", vert.data, vert.width, vert.height);
