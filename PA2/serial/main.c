@@ -18,7 +18,7 @@
 
 // structs
 typedef struct {
-    int16_t *data;
+    float *data;
     int width;
     int height;
 } img_s;
@@ -35,7 +35,8 @@ void img_prep(const img_s *orig, img_s *cpy);
 void h_conv(img_s *in_img, img_s *out_img, const kern_s *kern);
 void v_conv(img_s *in_img, img_s *out_img, const kern_s *kern);
 void suppression(img_s *direction, img_s *magnitude, img_s *out_img);
-void hyst(img_s *img);
+void hyst(img_s *img, float t_high, float t_low);
+void edge_linking(img_s *hyst, img_s *edges);
 
 int sortcomp(const void *e1, const void *e2);
 
@@ -98,11 +99,18 @@ int main(int argc, char *argv[]) {
     write_image_template("output/direction.pgm", direction.data, direction.width, direction.height);
     write_image_template("output/magnitude.pgm", magnitude.data, magnitude.width, magnitude.height);
 
-    suppression(&direction, &magnitude, &temp);
-    write_image_template("output/suppression.pgm", temp.data, temp.width, temp.height);
+    // re-use vert as suppression and hori as hysteresis to save some memory so my VM can handle the bigger images
+    suppression(&direction, &magnitude, &vert);
+    write_image_template("output/suppression.pgm", vert.data, vert.width, vert.height);
 
-    qsort(temp.data, temp.width * temp.height, sizeof(int16_t), sortcomp);
-    hyst(&temp);
+    memcpy(temp.data, vert.data, sizeof(float) * vert.height * vert.width);
+    qsort(temp.data, temp.width * temp.height, sizeof(float), sortcomp);
+    float t_high = temp.data[(size_t) (temp.height * temp.width * 0.95)];
+    float t_low = t_high / 5.0;
+    hyst(&vert, t_high, t_low);
+    write_image_template("output/pre-hyst.pgm", vert.data, vert.width, vert.height);
+    edge_linking(&vert, &hori);
+    write_image_template("output/hysteresis.pgm", hori.data, hori.width, hori.height);
 
     // stop time
     gettimeofday(&end, NULL);
@@ -124,7 +132,7 @@ int main(int argc, char *argv[]) {
 void img_prep(const img_s *orig, img_s *cpy) {
     cpy->height = orig->height;
     cpy->width = orig->width;
-    cpy->data = (int16_t *) calloc(cpy->height * cpy ->width, sizeof(int16_t));
+    cpy->data = (float *) calloc(cpy->height * cpy ->width, sizeof(float));
 }
 
 void print_kern(kern_s *kern) {
@@ -203,7 +211,7 @@ void v_conv(img_s *in_img, img_s *out_img, const kern_s *kern) {
     }
 }
 
-void suppression(img_s *direction, img_s *magnitude, img_s *out_img) {
+void suppression(img_s *direction, img_s *magnitude, img_s *supp) {
     #define Gxy magnitude->data
     size_t bounds = direction->width * direction->height;
     size_t width = magnitude->width;
@@ -216,57 +224,65 @@ void suppression(img_s *direction, img_s *magnitude, img_s *out_img) {
             theta += M_PI;
         }
         theta *= (180.0 / M_PI);
-        out_img->data[i] = Gxy[i];
+        supp->data[i] = Gxy[i];
         if (theta <= 22.5 || theta > 157.5) {
             // top
             if (i >= width) {
-                if (theta < Gxy[i - width]) {
-                    out_img->data[i] = 0;
+                if (Gxy[i] < Gxy[i - width]) {
+                    supp->data[i] = 0;
+                    continue;
                 }
             }
             // bottom
             if (i < bounds - width) {
-                if (theta < Gxy[i + width]) {
-                    out_img->data[i] = 0;
+                if (Gxy[i] < Gxy[i + width]) {
+                    supp->data[i] = 0;
+                    continue;
                 }
             }
         } else if (theta > 22.5 && theta <= 67.5) {
             //topleft
             if (i >= width && i % width > 0) {
-                if (theta < Gxy[i - btm_right]) {
-                    out_img->data[i] = 0;
+                if (Gxy[i] < Gxy[i - btm_right]) {
+                    supp->data[i] = 0;
+                    continue;
                 }
             }
             // bottomright
             if (i < bounds - width && i % width < width-1) {
-                if (theta < Gxy[i + btm_right]) {
-                    out_img->data[i] = 0;
+                if (Gxy[i] < Gxy[i + btm_right]) {
+                    supp->data[i] = 0;
+                    continue;
                 }
             }
         } else if (theta > 67.5 && theta <= 112.5) {
             // left
             if (i % width > 0) {
-                if (theta < Gxy[i - 1]) {
-                    out_img->data[i] = 0;
+                if (Gxy[i] < Gxy[i - 1]) {
+                    supp->data[i] = 0;
+                    continue;
                 }
             }
             // right
             if (i % width < width-1) {
-                if (theta < Gxy[i + 1]) {
-                    out_img->data[i] = 0;
+                if (Gxy[i] < Gxy[i + 1]) {
+                    supp->data[i] = 0;
+                    continue;
                 }
             }
         } else if (theta > 112.5 && theta <= 157.5) {
             // topright
             if (i >= width && i % width < width-1) {
-                if (theta < magnitude->data[i - btm_left]) {
-                    out_img->data[i] = 0;
+                if (Gxy[i] < Gxy[i - btm_left]) {
+                    supp->data[i] = 0;
+                    continue;
                 }
             }
             // bottomleft
             if (i < bounds - width && i % width > 0) {
-                if (theta < magnitude->data[i + btm_left]) {
-                    out_img->data[i] = 0;
+                if (Gxy[i] < Gxy[i + btm_left]) {
+                    supp->data[i] = 0;
+                    continue;
                 }
             }
         }
@@ -274,23 +290,91 @@ void suppression(img_s *direction, img_s *magnitude, img_s *out_img) {
     #undef Gxy
 }
 
-void hyst(img_s *img) {
+void hyst(img_s *img, float t_high, float t_low) {
     size_t bounds = img->height * img-> width;
-    int16_t t_high = img->data[bounds / 10];
-    int16_t t_low = t_high / 5.0;
     for(size_t i = 0; i < bounds; i++) {
         if (img->data[i] >= t_high) {
             img->data[i] = 255;
         } else if (img->data[i] <= t_low) {
             img->data[i] = 0;
-        } else  {
+        } else {
             img->data[i] = 125;
         }
     }
 }
 
+void edge_linking(img_s *hyst, img_s *edges) {
+    size_t bounds = hyst->height * hyst-> width;
+    size_t width = hyst->width;
+    size_t btm_right = width + 1;
+    size_t btm_left = width - 1;
+    for (size_t i = 0 ; i < bounds; i++) {
+        if(hyst->data[i] == 125) {
+            // topleft
+            if (i >= width && i % width > 0) {
+                if (hyst->data[i - btm_right] == 255) {
+                    edges->data[i] = 255;
+                    continue;
+                }
+            }
+            // top
+            if (i >= width) {
+                if (hyst->data[i - width] == 255) {
+                    edges->data[i] = 255;
+                    continue;
+                }
+            }
+            // topright
+            if (i >= width && i % width < width-1) {
+                if (hyst->data[i - btm_left] == 255) {
+                    edges->data[i] = 255;
+                    continue;
+                }
+            }
+            // left
+            if (i % width > 0) {
+                if (hyst->data[i - 1] == 255) {
+                    edges->data[i] = 255;
+                    continue;
+                }
+            }
+            // right
+            if (i % width > width-1) {
+                if (hyst->data[i + 1] == 255) {
+                    edges->data[i] = 255;
+                    continue;
+                }
+            }
+            // bottomleft
+            if (i < bounds - width && i % width > 0) {
+                if (hyst->data[i + btm_left] == 255) {
+                    edges->data[i] = 255;
+                    continue;
+                }
+            }
+            // bottom
+            if (i < bounds - width) {
+                if (hyst->data[i + width] == 255) {
+                    edges->data[i] = 255;
+                    continue;
+                }
+            }
+            // bottomright
+            if (i < bounds - width && i % width < width-1) {
+                if (hyst->data[i + btm_right] == 255) {
+                    edges->data[i] = 255;
+                    continue;
+                }
+            }
+            edges->data[i] = 0;
+        } else {
+            edges->data[i] = hyst->data[i];
+        }
+    }
+}
+
 int sortcomp(const void *e1, const void *e2) {
-    int16_t *i1 = (int16_t *) e1;
-    int16_t *i2 = (int16_t *) e2;
-    return (int) (*i1 - *i2);
+    float f1 = *(float *) e1;
+    float f2 = *(float *) e2;
+    return (f1 > f2) - (f1 < f2);
 }
