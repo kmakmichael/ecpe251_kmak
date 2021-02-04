@@ -37,6 +37,7 @@ void v_conv(img_s *in_img, img_s *out_img, const kern_s *kern);
 void suppression(img_s *direction, img_s *magnitude, img_s *out_img);
 void hyst(img_s *img, float t_high, float t_low);
 void edge_linking(img_s *hyst, img_s *edges);
+float timecalc(struct timeval start, struct timeval end);
 
 int sortcomp(const void *e1, const void *e2);
 
@@ -49,7 +50,7 @@ int main(int argc, char *argv[]) {
     img_s magnitude;
     img_s direction;
     kern_s kern;
-    struct timeval start, end;
+    struct timeval readstart, compstart, conv, mag, sup, sort, doublethresh, edge, end;
     float sigma;
     float a;
 
@@ -62,6 +63,8 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "invalid sigma: %s\n", argv[2]);
     }
 
+    // begin time
+    gettimeofday(&readstart, NULL);
     read_image_template(argv[1], &image.data, &image.width, &image.height);
     img_prep(&image, &temp);
     img_prep(&image, &vert);
@@ -75,7 +78,7 @@ int main(int argc, char *argv[]) {
     kern.data = (float*) calloc(kern.w, sizeof(float));
 
     // begin time
-    gettimeofday(&start, NULL);
+    gettimeofday(&compstart, NULL);
 
     // horizontal
     gaussian_kern(&kern, sigma, a);
@@ -114,9 +117,7 @@ int main(int argc, char *argv[]) {
     // stop time
     gettimeofday(&end, NULL);
 
-    float runtime = (end.tv_sec * 1000000 + end.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec);
-    printf("Runtime: %f ms\n", runtime / 1000.0);
-
+    printf("%d, %.1f, %.1f, %.1f\n", image.height, sigma, timecalc(compstart, end), timecalc(readstart, end));
 
     free(image.data);
     free(temp.data);
@@ -370,6 +371,11 @@ void edge_linking(img_s *hyst, img_s *edges) {
             edges->data[i] = hyst->data[i];
         }
     }
+}
+
+float timecalc(struct timeval start, struct timeval end) {
+    float ns = (end.tv_sec * 1000000 + end.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec);
+    return ns / 1000.0;
 }
 
 int sortcomp(const void *e1, const void *e2) {
