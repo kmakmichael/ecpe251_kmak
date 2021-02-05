@@ -113,27 +113,27 @@ int main(int argc, char *argv[]) {
         {
             h_kern.w = 2 * a + 1;
             h_kern.data = (float*) calloc(h_kern.w, sizeof(float));
-            gaussian_kern(&h_kern, sigma, a);
         }
         #pragma omp section
         {
             v_kern.w = 2 * a + 1;
             v_kern.data = (float*) calloc(v_kern.w, sizeof(float));
-            gaussian_kern(&v_kern, sigma, a);
         }
         #pragma omp section
         {
             h_deriv.w = 2 * a + 1;
             h_deriv.data = (float*) calloc(h_deriv.w, sizeof(float));
-            gaussian_deriv(&h_deriv, sigma, a);
         }
         #pragma omp section
         {
             v_deriv.w = 2 * a + 1;
             v_deriv.data = (float*) calloc(v_deriv.w, sizeof(float));
-            gaussian_deriv(&v_deriv, sigma, a);
         }
     }
+    gaussian_kern(&h_kern, sigma, a);
+    gaussian_kern(&v_kern, sigma, a);
+    gaussian_deriv(&h_deriv, sigma, a);
+    gaussian_deriv(&v_deriv, sigma, a);
 
     gettimeofday(&compstart, NULL);
 
