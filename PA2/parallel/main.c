@@ -4,7 +4,7 @@
     PA1 - Canny Edge Detector
 
     usage: ./canny <image path> <sigma> <num threads>
-    
+
 */
 
 #include "stdio.h"
@@ -34,6 +34,7 @@ typedef struct {
 // functions
 void gaussian_kern(kern_s *kern, float sigma, float a);
 void gaussian_deriv(kern_s *kern, float sigma, float a);
+void kerninit(kern_s *kern);
 void img_prep(const img_s *orig, img_s *cpy);
 void h_conv(img_s *in_img, img_s *out_img, const kern_s *kern);
 void v_conv(img_s *in_img, img_s *out_img, const kern_s *kern);
@@ -55,7 +56,10 @@ int main(int argc, char *argv[]) {
     img_s supp;
     img_s hyst;
     size_t numthreads;
-    kern_s kern;
+    kern_s h_kern;
+    kern_s h_deriv;
+    kern_s v_kern;
+    kern_s v_deriv;
     struct timeval start, compstart, conv, mag, sup, sort, doublethresh, edge, compend, end;
     float sigma;
     float a;
@@ -83,33 +87,55 @@ int main(int argc, char *argv[]) {
     // begin time
     gettimeofday(&start, NULL);
     read_image_template(argv[1], &image.data, &image.width, &image.height);
-    img_prep(&image, &temp);
-    img_prep(&image, &vert);
-    img_prep(&image, &hori);
-    img_prep(&image, &magnitude);
-    img_prep(&image, &direction);
-    img_prep(&image, &supp);
-    img_prep(&image, &hyst);
-
+    #pragma omp parallel sections
+    {
+        #pragma omp section
+        img_prep(&image, &temp);
+        #pragma omp section
+        img_prep(&image, &vert);
+        #pragma omp section
+        img_prep(&image, &hori);
+        #pragma omp section
+        img_prep(&image, &magnitude);
+        #pragma omp section
+        img_prep(&image, &direction);
+        #pragma omp section
+        img_prep(&image, &supp);
+        #pragma omp section
+        img_prep(&image, &hyst);
+    }
+    
     // kernel initialization
     a = round(2.5 * sigma - 0.5);
-    kern.w = 2 * a + 1;
-    kern.data = (float*) calloc(kern.w, sizeof(float));
+    #pragma omp parallel sections
+    {
+        #pragma omp section
+        h_kern.w = 2 * a + 1;
+        gaussian_kern(&h_kern, sigma, a);
+        h_kern.data = (float*) calloc(h_kern.w, sizeof(float));
+        #pragma omp section
+        v_kern.w = 2 * a + 1;
+        v_kern.data = (float*) calloc(v_kern.w, sizeof(float));
+        gaussian_kern(&v_kern, sigma, a);
+        #pragma omp section
+        h_deriv.w = 2 * a + 1;
+        h_deriv.data = (float*) calloc(h_deriv.w, sizeof(float));
+        gaussian_deriv(&h_deriv, sigma, a);
+        #pragma omp section
+        v_deriv.w = 2 * a + 1;
+        v_deriv.data = (float*) calloc(v_deriv.w, sizeof(float));
+        gaussian_deriv(&v_deriv, sigma, a);
+    }
 
-    // begin time
     gettimeofday(&compstart, NULL);
 
     // horizontal
-    gaussian_kern(&kern, sigma, a);
-    h_conv(&image, &temp, &kern);
-    gaussian_deriv(&kern, sigma, a);
-    h_conv(&temp, &hori, &kern);
+    h_conv(&image, &temp, &h_kern);
+    h_conv(&temp, &hori, &h_deriv);
 
     // vertical
-    gaussian_kern(&kern, sigma, a);
-    v_conv(&image, &temp, &kern);
-    gaussian_deriv(&kern, sigma, a);
-    v_conv(&temp, &vert, &kern);
+    v_conv(&image, &temp, &v_kern);
+    v_conv(&temp, &vert, &v_deriv);
 
     gettimeofday(&conv, NULL);
 
@@ -149,10 +175,17 @@ int main(int argc, char *argv[]) {
     // stop time
     gettimeofday(&compend, NULL);
     
-    write_image_template("direction.pgm", direction.data, direction.width, direction.height);
-    write_image_template("magnitude.pgm", magnitude.data, magnitude.width, magnitude.height);
-    write_image_template("suppression.pgm", supp.data, supp.width, supp.height);
-    write_image_template("hysteresis.pgm", hyst.data, hyst.width, hyst.height);
+    #pragma omp parallel sections
+    {
+        #pragma omp section
+        write_image_template("direction.pgm", direction.data, direction.width, direction.height);
+        #pragma omp section
+        write_image_template("magnitude.pgm", magnitude.data, magnitude.width, magnitude.height);
+        #pragma omp section
+        write_image_template("suppression.pgm", supp.data, supp.width, supp.height);
+        #pragma omp section
+        write_image_template("hysteresis.pgm", hyst.data, hyst.width, hyst.height);
+    }
 
     gettimeofday(&end, NULL);
 
