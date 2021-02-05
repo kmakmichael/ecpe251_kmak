@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --partition=compute   ### Partition
-#SBATCH --job-name=PA2_kmak ### Job Name
+
+#SBATCH --job-name=PA2-S_kmak ### Job Name
 #SBATCH --time=03:00:00     ### WallTime
 #SBATCH --nodes=1           ### Number of Nodes
 #SBATCH --ntasks-per-node=1 ### Number of tasks (MPI processes)
