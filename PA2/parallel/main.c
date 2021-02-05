@@ -132,7 +132,7 @@ int main(int argc, char *argv[]) {
     // stop time
     gettimeofday(&end, NULL);
 
-    printf("%d, %.1f, %.1f, %.1f\n", image.height, sigma, timecalc(compstart, end), timecalc(readstart, end));
+    printf("%d, %.1f, %zu, %.1f, %.1f\n", image.height, sigma, numthreads, timecalc(compstart, end), timecalc(readstart, end));
 
     free(image.data);
     free(temp.data);
