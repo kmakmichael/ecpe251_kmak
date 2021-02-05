@@ -17,6 +17,8 @@
 
 #include "image_template.h"
 
+#define timing_mode 1
+
 // structs
 typedef struct {
     float *data;
@@ -36,7 +38,7 @@ void img_prep(const img_s *orig, img_s *cpy);
 void h_conv(img_s *in_img, img_s *out_img, const kern_s *kern);
 void v_conv(img_s *in_img, img_s *out_img, const kern_s *kern);
 void suppression(img_s *direction, img_s *magnitude, img_s *out_img);
-void hyst(img_s *img, float t_high, float t_low);
+void hysteresis(img_s *img, float t_high, float t_low);
 void edge_linking(img_s *hyst, img_s *edges);
 float timecalc(struct timeval start, struct timeval end);
 
@@ -50,9 +52,11 @@ int main(int argc, char *argv[]) {
     img_s hori;
     img_s magnitude;
     img_s direction;
+    img_s supp;
+    img_s hyst;
     size_t numthreads;
     kern_s kern;
-    struct timeval readstart, compstart, conv, mag, sup, sort, doublethresh, edge, end;
+    struct timeval start, compstart, conv, mag, sup, sort, doublethresh, edge, compend, end;
     float sigma;
     float a;
 
@@ -77,13 +81,15 @@ int main(int argc, char *argv[]) {
     omp_set_num_threads(numthreads);
 
     // begin time
-    gettimeofday(&readstart, NULL);
+    gettimeofday(&start, NULL);
     read_image_template(argv[1], &image.data, &image.width, &image.height);
     img_prep(&image, &temp);
     img_prep(&image, &vert);
     img_prep(&image, &hori);
     img_prep(&image, &magnitude);
     img_prep(&image, &direction);
+    img_prep(&image, &supp);
+    img_prep(&image, &hyst);
 
     // kernel initialization
     a = round(2.5 * sigma - 0.5);
@@ -105,6 +111,8 @@ int main(int argc, char *argv[]) {
     gaussian_deriv(&kern, sigma, a);
     v_conv(&temp, &vert, &kern);
 
+    gettimeofday(&conv, NULL);
+
     // direction and magnitude
     #pragma omp parallel for
     for(size_t i = 0; i < image.height * image.width; i++) {
@@ -114,25 +122,59 @@ int main(int argc, char *argv[]) {
     for(size_t i = 0; i < image.height * image.width; i++) {
         direction.data[i] = atan2(hori.data[i], vert.data[i]);
     }
-    write_image_template("direction.pgm", direction.data, direction.width, direction.height);
-    write_image_template("magnitude.pgm", magnitude.data, magnitude.width, magnitude.height);
 
-    // re-use vert as suppression and hori as hysteresis to save some memory so my VM can handle the bigger images
-    suppression(&direction, &magnitude, &vert);
-    write_image_template("suppression.pgm", vert.data, vert.width, vert.height);
+    gettimeofday(&mag, NULL);
 
-    memcpy(temp.data, vert.data, sizeof(float) * vert.height * vert.width);
+    suppression(&direction, &magnitude, &supp);
+
+    gettimeofday(&sup, NULL);
+
+    memcpy(temp.data, supp.data, sizeof(float) * supp.height * supp.width);
     qsort(temp.data, temp.width * temp.height, sizeof(float), sortcomp);
+
+    gettimeofday(&sort, NULL);
+
     float t_high = temp.data[(size_t) (temp.height * temp.width * 0.9)];
     float t_low = t_high / 5.0;
-    hyst(&vert, t_high, t_low);
-    edge_linking(&vert, &hori);
-    write_image_template("hysteresis.pgm", hori.data, hori.width, hori.height);
+    memcpy(temp.data, supp.data, sizeof(float) * supp.height * supp.width);
+    hysteresis(&temp, t_high, t_low);
+
+    gettimeofday(&doublethresh, NULL);
+
+    edge_linking(&temp, &hyst);
+
+    gettimeofday(&edge, NULL);
 
     // stop time
+    gettimeofday(&compend, NULL);
+    
+    write_image_template("direction.pgm", direction.data, direction.width, direction.height);
+    write_image_template("magnitude.pgm", magnitude.data, magnitude.width, magnitude.height);
+    write_image_template("suppression.pgm", supp.data, supp.width, supp.height);
+    write_image_template("hysteresis.pgm", hyst.data, hyst.width, hyst.height);
+
     gettimeofday(&end, NULL);
 
-    printf("%d, %.1f, %zu, %.1f, %.1f\n", image.height, sigma, numthreads, timecalc(compstart, end), timecalc(readstart, end));
+    printf("%d, %.1f, %zu, %.1f, %.1f\n", 
+        image.height, 
+        sigma, 
+        numthreads, 
+        timecalc(compstart, end), 
+        timecalc(start, end)
+    );
+
+    if (timing_mode) {
+        printf("TIMING STATS:\n %.1f, %.1f, %.1f, %.1f, %.1f, %.1f, %.1f, %.1f\n",
+            timecalc(compstart, compend), // comp_time
+            timecalc(compstart, conv), // conv_time
+            timecalc(conv, mag), // mag_time
+            timecalc(mag, sup), // sup_time
+            timecalc(sup, sort), // sort_time
+            timecalc(sort, doublethresh), // doublethresh_time
+            timecalc(doublethresh, edge), // edge_time
+            timecalc(start, end) // total_time
+        );
+    }
 
     free(image.data);
     free(temp.data);
@@ -140,6 +182,8 @@ int main(int argc, char *argv[]) {
     free(hori.data);
     free(magnitude.data);
     free(direction.data);
+    free(hyst.data);
+    free(supp.data);
     free(kern.data);
     return 0;
 }
@@ -312,7 +356,7 @@ void suppression(img_s *direction, img_s *magnitude, img_s *supp) {
     #undef Gxy
 }
 
-void hyst(img_s *img, float t_high, float t_low) {
+void hysteresis(img_s *img, float t_high, float t_low) {
     size_t bounds = img->height * img-> width;
     #pragma omp parallel for
     for(size_t i = 0; i < bounds; i++) {
