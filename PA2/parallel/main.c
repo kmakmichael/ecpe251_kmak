@@ -110,21 +110,29 @@ int main(int argc, char *argv[]) {
     #pragma omp parallel sections
     {
         #pragma omp section
-        h_kern.w = 2 * a + 1;
-        gaussian_kern(&h_kern, sigma, a);
-        h_kern.data = (float*) calloc(h_kern.w, sizeof(float));
+        {
+            h_kern.w = 2 * a + 1;
+            h_kern.data = (float*) calloc(h_kern.w, sizeof(float));
+            gaussian_kern(&h_kern, sigma, a);
+        }
         #pragma omp section
-        v_kern.w = 2 * a + 1;
-        v_kern.data = (float*) calloc(v_kern.w, sizeof(float));
-        gaussian_kern(&v_kern, sigma, a);
+        {
+            v_kern.w = 2 * a + 1;
+            v_kern.data = (float*) calloc(v_kern.w, sizeof(float));
+            gaussian_kern(&v_kern, sigma, a);
+        }
         #pragma omp section
-        h_deriv.w = 2 * a + 1;
-        h_deriv.data = (float*) calloc(h_deriv.w, sizeof(float));
-        gaussian_deriv(&h_deriv, sigma, a);
+        {
+            h_deriv.w = 2 * a + 1;
+            h_deriv.data = (float*) calloc(h_deriv.w, sizeof(float));
+            gaussian_deriv(&h_deriv, sigma, a);
+        }
         #pragma omp section
-        v_deriv.w = 2 * a + 1;
-        v_deriv.data = (float*) calloc(v_deriv.w, sizeof(float));
-        gaussian_deriv(&v_deriv, sigma, a);
+        {
+            v_deriv.w = 2 * a + 1;
+            v_deriv.data = (float*) calloc(v_deriv.w, sizeof(float));
+            gaussian_deriv(&v_deriv, sigma, a);
+        }
     }
 
     gettimeofday(&compstart, NULL);
@@ -219,7 +227,10 @@ int main(int argc, char *argv[]) {
     free(direction.data);
     free(hyst.data);
     free(supp.data);
-    free(kern.data);
+    free(h_kern.data);
+    free(v_kern.data);
+    free(h_deriv.data);
+    free(v_deriv.data);
     return 0;
 }
 
