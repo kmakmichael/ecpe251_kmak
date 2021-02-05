@@ -7,7 +7,7 @@ CC=g++
 #   -Wall:  Enable all warnings about lazy / dangerous C programming 
 #  You can add additional options on this same line..
 #  WARNING: NEVER REMOVE THE -c FLAG, it is essential to proper operation
-CFLAGS=-c -Wall -O3
+CFLAGS=-fopenmp -c -Wall -O3
 
 # All of the .h header files to use as dependencies
 HEADERS=image_template.h
@@ -16,7 +16,7 @@ HEADERS=image_template.h
 OBJECTS=main.o
 
 # The final program to build
-EXECUTABLE=canny_stage1
+EXECUTABLE=canny
 
 # --------------------------------------------
 
