@@ -63,10 +63,16 @@ int main(int argc, char *argv[]) {
     sigma = atof(argv[2]);
     if (sigma <= 0) {
         fprintf(stderr, "invalid sigma: %s\n", argv[2]);
+        return -1;
     }
     numthreads = atoi(argv[3]);
     if (numthreads <= 0) {
         fprintf(stderr, "invalid number of threads: %s\n", argv[3]);
+        return -1;
+    }
+    if (numthreads > omp_get_num_procs()) {
+        fprintf(stderr, "trying to use more threads than processors\n");
+        return -1;
     }
     omp_set_num_threads(numthreads);
 
@@ -100,9 +106,11 @@ int main(int argc, char *argv[]) {
     v_conv(&temp, &vert, &kern);
 
     // direction and magnitude
+    #pragma omp parallel for
     for(size_t i = 0; i < image.height * image.width; i++) {
         magnitude.data[i] = sqrt((hori.data[i] * hori.data[i]) + (vert.data[i] * vert.data[i]));
     }
+    #pragma omp parallel for
     for(size_t i = 0; i < image.height * image.width; i++) {
         direction.data[i] = atan2(hori.data[i], vert.data[i]);
     }
