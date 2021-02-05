@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --partition=compute   ### Partition
-#SBATCH --job-name=Project02 ### Job Name
+#SBATCH --job-name=Project02_kmak ### Job Name
 #SBATCH --time=00:10:00     ### WallTime
 #SBATCH --nodes=1           ### Number of Nodes
 #SBATCH --ntasks-per-node=1 ### Number of tasks (MPI processes)
