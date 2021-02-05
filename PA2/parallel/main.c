@@ -15,9 +15,10 @@
 #include "sys/time.h"
 #include "omp.h"
 
+#include "sort.h"
 #include "image_template.h"
 
-#define timing_mode 1
+#define timing_mode 0
 
 // structs
 typedef struct {
@@ -130,12 +131,13 @@ int main(int argc, char *argv[]) {
     gettimeofday(&sup, NULL);
 
     memcpy(temp.data, supp.data, sizeof(float) * supp.height * supp.width);
-    qsort(temp.data, temp.width * temp.height, sizeof(float), sortcomp);
-
-    gettimeofday(&sort, NULL);
+    mergeSort(temp.data, temp.width * temp.height, numthreads);
 
     float t_high = temp.data[(size_t) (temp.height * temp.width * 0.9)];
     float t_low = t_high / 5.0;
+    
+    gettimeofday(&sort, NULL);
+
     memcpy(temp.data, supp.data, sizeof(float) * supp.height * supp.width);
     hysteresis(&temp, t_high, t_low);
 
@@ -164,7 +166,8 @@ int main(int argc, char *argv[]) {
     );
 
     if (timing_mode) {
-        printf("TIMING STATS:\n %.1f, %.1f, %.1f, %.1f, %.1f, %.1f, %.1f, %.1f\n",
+        printf("\ncomp\tconv\tmag\tsup\tsort\tdt\tedge\ttotal\n");
+        printf("%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\n",
             timecalc(compstart, compend), // comp_time
             timecalc(compstart, conv), // conv_time
             timecalc(conv, mag), // mag_time
