@@ -161,11 +161,12 @@ void gaussian_kern(kern_s *kern, float sigma, float a) {
     float sum = 0;
 
     kern->data = (float*) calloc(kern->w, sizeof(float));
-
+    #pragma omp parallel for
     for (size_t i = 0; i < kern->w; i++) {
         kern->data[i] = exp((-1.0 * (i-a) * (i-a)) / (2.0 * sigma * sigma));
         sum += kern->data[i];
     }
+    #pragma omp parallel for
     for (size_t i = 0; i < kern->w; i++) {
         kern->data[i] /= sum;
     }
@@ -176,14 +177,17 @@ void gaussian_deriv(kern_s *kern, float sigma, float a) {
 
     kern->data = (float*) calloc(kern->w, sizeof(float));
 
+    #pragma omp parallel for
     for (size_t i = 0; i < kern->w; i++) {
         kern->data[i] = -1.0 * (i-a) * exp((-1.0 * (i-a) * (i-a)) / (2.0 * sigma * sigma));
         sum -= i * kern->data[i];
     }
+    #pragma omp parallel for
     for (size_t i = 0; i < kern->w; i++) {
         kern->data[i] /= sum;
     }
     // kernel flipping
+    #pragma omp parallel for
     for (size_t i = 0; i < (kern->w/2); i++) {
         float temp = kern->data[kern->w - 1 - i];
         kern->data[kern->w - 1 - i] = kern->data[i];
@@ -194,6 +198,7 @@ void gaussian_deriv(kern_s *kern, float sigma, float a) {
 void h_conv(img_s *in_img, img_s *out_img, const kern_s *kern) {
     size_t bounds = in_img->width * in_img->height;
     int i_off = 0;
+    #pragma omp parallel for
     for (size_t i = 0; i < bounds; i++) {
         float sum = 0;
         for( size_t k = 0; k < kern->w; k++) {
@@ -213,6 +218,7 @@ void h_conv(img_s *in_img, img_s *out_img, const kern_s *kern) {
 void v_conv(img_s *in_img, img_s *out_img, const kern_s *kern) {
     size_t bounds = in_img->width * in_img->height;
     int i_off = 0;
+    #pragma omp parallel for
     for (size_t i = 0; i < bounds; i++) {
         float sum = 0;
         for( size_t k = 0; k < kern->w; k++) {
@@ -233,6 +239,7 @@ void suppression(img_s *direction, img_s *magnitude, img_s *supp) {
     size_t btm_right = width + 1;
     size_t btm_left = width - 1;
     float theta;
+    #pragma omp parallel for
     for (size_t i = 0; i < bounds; i++) {
         theta = direction->data[i];
         if (theta < 0) {
@@ -307,6 +314,7 @@ void suppression(img_s *direction, img_s *magnitude, img_s *supp) {
 
 void hyst(img_s *img, float t_high, float t_low) {
     size_t bounds = img->height * img-> width;
+    #pragma omp parallel for
     for(size_t i = 0; i < bounds; i++) {
         if (img->data[i] >= t_high) {
             img->data[i] = 255;
@@ -323,6 +331,7 @@ void edge_linking(img_s *hyst, img_s *edges) {
     size_t width = hyst->width;
     size_t btm_right = width + 1;
     size_t btm_left = width - 1;
+    #pragma omp parallel for
     for (size_t i = 0 ; i < bounds; i++) {
         if(hyst->data[i] == 125) {
             // topleft
