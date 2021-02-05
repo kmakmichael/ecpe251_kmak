@@ -13,6 +13,7 @@
 #include "inttypes.h"
 #include "math.h"
 #include "sys/time.h"
+#include "omp.h"
 
 #include "image_template.h"
 
@@ -49,19 +50,25 @@ int main(int argc, char *argv[]) {
     img_s hori;
     img_s magnitude;
     img_s direction;
+    size_t numthreads;
     kern_s kern;
     struct timeval readstart, compstart, conv, mag, sup, sort, doublethresh, edge, end;
     float sigma;
     float a;
 
-    if (argc != 3) {
-        fprintf(stderr, "usage: canny_stage1 <image path> <sigma>\n");
+    if (argc != 4) {
+        fprintf(stderr, "usage: canny_stage1 <image path> <sigma> <# threads>\n");
         return -1;
     }
     sigma = atof(argv[2]);
     if (sigma <= 0) {
         fprintf(stderr, "invalid sigma: %s\n", argv[2]);
     }
+    numthreads = atoi(argv[3]);
+    if (numthreads <= 0) {
+        fprintf(stderr, "invalid number of threads: %s\n", argv[3]);
+    }
+    omp_set_num_threads(numthreads);
 
     // begin time
     gettimeofday(&readstart, NULL);
