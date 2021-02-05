@@ -3,9 +3,8 @@
     ECPE 251 - High-Performance Computing
     PA1 - Canny Edge Detector
 
-    usage: ./canny_stage1 <image path> <sigma>
-
-    quick description...
+    usage: ./canny <image path> <sigma> <num threads>
+    
 */
 
 #include "stdio.h"
