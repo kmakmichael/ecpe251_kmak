@@ -19,7 +19,7 @@ void mergeSort(float arr[], int n,int threads)
    int mid,right_end;
    for (curr_size=1; curr_size<=n-1; curr_size = 2*curr_size)
    {
-	
+	#pragma omp parallel for
 	for (left_start=0; left_start<n-1; left_start += 2*curr_size)
        {
 		 mid = min(left_start + curr_size - 1, n-1);
@@ -44,8 +44,10 @@ void merge(float arr[], int l, int m, int r)
     R = (float *)malloc(sizeof(float)*n2);
  
     /* Copy data to temp arrays L[] and R[] */
+    //#pragma omp parallel for
     for (i = 0; i < n1; i++)
         L[i] = arr[l + i];
+    //#pragma omp parallel for
     for (j = 0; j < n2; j++)
         R[j] = arr[m + 1+ j];
  
