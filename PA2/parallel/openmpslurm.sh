@@ -10,7 +10,7 @@ for sig in 0.6 1.1
 do
 for((t=2;t<=16;t=t*2)) do
 
-	for((i=1024;i<=4096;i=i*2)) do #each image 1024, 2048, and 4096
+	for((i=1024;i<=8192;i=i*2)) do #each image 1024, 2048, and 4096
 		for((j=0;j<30;j++)) do	#each image executed 30 times
 			srun --nodes=1 ./canny images/Lenna_org_$i.pgm $sig $t>>Parallel.csv
 		done
