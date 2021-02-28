@@ -12,6 +12,7 @@ usage: ./canny <image path> <sigma> <num threads>
 #include "inttypes.h"
 #include "math.h"
 #include "sys/time.h"
+#include "mpi.h"
 #include "omp.h"
 
 #include "sort.h"
