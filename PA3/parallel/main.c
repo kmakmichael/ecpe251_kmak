@@ -22,14 +22,14 @@ usage: ./canny <image path> <sigma> <num threads>
 
 // structs
 typedef struct {
-float *data;
-int width;
-int height;
+    float *data;
+    int width;
+    int height;
 } img_s;
 
 typedef struct {
-float *data;
-size_t w;
+    float *data;
+    size_t w;
 } kern_s;
 
 // functions
@@ -173,38 +173,40 @@ int main(int argc, char *argv[]) {
 
     edge_linking(&temp, &hyst);
 
-    gettimeofday(&edge, NULL);
+    if (comm_rank == 0) {
+        gettimeofday(&edge, NULL);
 
-    // stop time
-    gettimeofday(&compend, NULL);
+        // stop time
+        gettimeofday(&compend, NULL);
 
-    write_image_template("direction.pgm", direction.data, direction.width, direction.height);
-    write_image_template("magnitude.pgm", magnitude.data, magnitude.width, magnitude.height);
-    write_image_template("suppression.pgm", supp.data, supp.width, supp.height);
-    write_image_template("hysteresis.pgm", hyst.data, hyst.width, hyst.height);
+        write_image_template("direction.pgm", direction.data, direction.width, direction.height);
+        write_image_template("magnitude.pgm", magnitude.data, magnitude.width, magnitude.height);
+        write_image_template("suppression.pgm", supp.data, supp.width, supp.height);
+        write_image_template("hysteresis.pgm", hyst.data, hyst.width, hyst.height);
 
-    gettimeofday(&end, NULL);
+        gettimeofday(&end, NULL);
 
-    printf("%d, %.1f, %zu, %.1f, %.1f\n", 
-        image.height, 
-        sigma, 
-        numthreads, 
-        timecalc(compstart, end), 
-        timecalc(start, end)
-    );
-
-    if (timing_mode) {
-        printf("\ncomp\tconv\tmag\tsup\tsort\tdt\tedge\ttotal\n");
-        printf("%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\n",
-            timecalc(compstart, compend), // comp_time
-            timecalc(compstart, conv), // conv_time
-            timecalc(conv, mag), // mag_time
-            timecalc(mag, sup), // sup_time
-            timecalc(sup, sort), // sort_time
-            timecalc(sort, doublethresh), // doublethresh_time
-            timecalc(doublethresh, edge), // edge_time
-            timecalc(start, end) // total_time
+        printf("%d, %.1f, %zu, %.1f, %.1f\n", 
+            image.height, 
+            sigma, 
+            numthreads, 
+            timecalc(compstart, end), 
+            timecalc(start, end)
         );
+
+        if (timing_mode) {
+            printf("\ncomp\tconv\tmag\tsup\tsort\tdt\tedge\ttotal\n");
+            printf("%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\n",
+                timecalc(compstart, compend), // comp_time
+                timecalc(compstart, conv), // conv_time
+                timecalc(conv, mag), // mag_time
+                timecalc(mag, sup), // sup_time
+                timecalc(sup, sort), // sort_time
+                timecalc(sort, doublethresh), // doublethresh_time
+                timecalc(doublethresh, edge), // edge_time
+                timecalc(start, end) // total_time
+            );
+        }
     }
 
     free(image.data);
