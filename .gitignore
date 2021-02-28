@@ -12,3 +12,6 @@
 
 # vscode
 .vscode/
+
+# vim
+*.swp
