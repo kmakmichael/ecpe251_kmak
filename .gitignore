@@ -9,3 +9,6 @@
 
 # slurm stuff
 *.sh.*
+
+# vscode
+.vscode/
