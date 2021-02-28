@@ -1,9 +1,9 @@
 /*
-    Michael Kmak
-    ECPE 251 - High-Performance Computing
-    PA3 - Canny Edge Detector
+Michael Kmak
+ECPE 251 - High-Performance Computing
+PA3 - Canny Edge Detector
 
-    usage: ./canny <image path> <sigma> <num threads>
+usage: ./canny <image path> <sigma> <num threads>
 
 */
 
@@ -21,14 +21,14 @@
 
 // structs
 typedef struct {
-    float *data;
-    int width;
-    int height;
+float *data;
+int width;
+int height;
 } img_s;
 
 typedef struct {
-    float *data;
-    size_t w;
+float *data;
+size_t w;
 } kern_s;
 
 // functions
@@ -44,6 +44,19 @@ void edge_linking(img_s *hyst, img_s *edges);
 float timecalc(struct timeval start, struct timeval end);
 
 int main(int argc, char *argv[]) {
+
+
+    int comm_size;
+    int comm_rank;
+    int rc;
+
+    rc = MPI_Init(&argc, &argv);
+    if (rc != MPI_SUCCESS) {
+        MPI_Abort(MPI_COMM_WORLD, rc);
+    }
+
+    MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
 
     img_s image;
     img_s temp;
@@ -62,30 +75,39 @@ int main(int argc, char *argv[]) {
     float sigma;
     float a;
 
-    if (argc != 3) {
-        fprintf(stderr, "usage: canny <image path> <sigma>\n");
-        return -1;
-    }
-    sigma = atof(argv[2]);
-    if (sigma <= 0) {
-        fprintf(stderr, "invalid sigma: %s\n", argv[2]);
-        return -1;
+    if (comm_rank == 0) {
+        if (argc != 3) {
+            fprintf(stderr, "usage: canny <image path> <sigma>\n");
+            MPI_Abort(MPI_COMM_WORLD, MPI_ERR_ARG);
+            return -1;
+        }
+        sigma = atof(argv[2]);
+        if (sigma <= 0) {
+            fprintf(stderr, "invalid sigma: %s\n", argv[2]);
+            MPI_Abort(MPI_COMM_WORLD, MPI_ERR_ARG);
+            return -1;
+        }
     }
     numthreads = 1; //atoi(argv[3]);
-    /*if (numthreads <= 0) {
-        fprintf(stderr, "invalid number of threads: %s\n", argv[3]);
-        return -1;
-    }
+    if (numthreads <= 0) {
+            fprintf(stderr, "invalid number of threads: %s\n", argv[3]);
+            MPI_Abort(MPI_COMM_WORLD, MPI_ERR_ARG);
+            return -1;
+        }
+    /*
     if (numthreads > omp_get_num_procs()) {
         fprintf(stderr, "trying to use more threads than processors\n");
+        MPI_Abort(MPI_COMM_WORLD, rc);
         return -1;
     }
     omp_set_num_threads(numthreads);
     */
 
-    // begin time
-    gettimeofday(&start, NULL);
-    read_image_template(argv[1], &image.data, &image.width, &image.height);
+    if (comm_rank == 0) {
+        // begin time
+        gettimeofday(&start, NULL);
+        read_image_template(argv[1], &image.data, &image.width, &image.height);
+    }
     img_prep(&image, &temp);
     img_prep(&image, &vert);
     img_prep(&image, &hori);
@@ -93,7 +115,7 @@ int main(int argc, char *argv[]) {
     img_prep(&image, &direction);
     img_prep(&image, &supp);
     img_prep(&image, &hyst);
-    
+
     a = round(2.5 * sigma - 0.5);
     h_kern.w = 2 * a + 1;
     h_kern.data = (float*) calloc(h_kern.w, sizeof(float));
@@ -140,7 +162,7 @@ int main(int argc, char *argv[]) {
 
     float t_high = temp.data[(size_t) (temp.height * temp.width * 0.9)];
     float t_low = t_high / 5.0;
-    
+
     gettimeofday(&sort, NULL);
 
     memcpy(temp.data, supp.data, sizeof(float) * supp.height * supp.width);
@@ -154,7 +176,7 @@ int main(int argc, char *argv[]) {
 
     // stop time
     gettimeofday(&compend, NULL);
-    
+
     write_image_template("direction.pgm", direction.data, direction.width, direction.height);
     write_image_template("magnitude.pgm", magnitude.data, magnitude.width, magnitude.height);
     write_image_template("suppression.pgm", supp.data, supp.width, supp.height);
@@ -196,6 +218,9 @@ int main(int argc, char *argv[]) {
     free(v_kern.data);
     free(h_deriv.data);
     free(v_deriv.data);
+
+    MPI_Finalize();
+
     return 0;
 }
 
