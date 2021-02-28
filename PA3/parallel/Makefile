@@ -1,6 +1,6 @@
 # The variable CC specifies which compiler will be used.
 # (because different unix systems may use different compilers)
-CC=g++
+CC=mpicxx -fopenmp
 
 # The variable CFLAGS specifies compiler options
 #   -c :    Only compile (don't link)
@@ -10,7 +10,7 @@ CC=g++
 CFLAGS=-c -Wall -O3
 
 # All of the .h header files to use as dependencies
-HEADERS=image_template.h
+HEADERS=image_template.h sort.h
 
 # All of the object files to produce as intermediary work
 OBJECTS=main.o
