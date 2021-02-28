@@ -36,7 +36,7 @@ typedef struct {
 void gaussian_kern(kern_s *kern, float sigma, float a);
 void gaussian_deriv(kern_s *kern, float sigma, float a);
 void kerninit(kern_s *kern);
-void img_prep(const img_s *orig, img_s *cpy);
+void img_prep(const img_s *img, int w, int h);
 void h_conv(img_s *in_img, img_s *out_img, const kern_s *kern);
 void v_conv(img_s *in_img, img_s *out_img, const kern_s *kern);
 void suppression(img_s *direction, img_s *magnitude, img_s *out_img);
@@ -46,7 +46,13 @@ float timecalc(struct timeval start, struct timeval end);
 
 int main(int argc, char *argv[]) {
 
-
+    img_s image, temp, vert, hori, magnitude, direction, supp, hyst;
+    img_s chunk;
+    kern_s h_kern, v_kern, h_deriv, v_deriv;
+    struct timeval start, compstart, conv, mag, sup, sort, doublethresh, edge, compend, end;
+    float sigma;
+    float a;
+    size_t numthreads;
     int comm_size;
     int comm_rank;
     int rc;
@@ -58,23 +64,6 @@ int main(int argc, char *argv[]) {
 
     MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-
-    img_s image;
-    img_s temp;
-    img_s vert;
-    img_s hori;
-    img_s magnitude;
-    img_s direction;
-    img_s supp;
-    img_s hyst;
-    size_t numthreads;
-    kern_s h_kern;
-    kern_s h_deriv;
-    kern_s v_kern;
-    kern_s v_deriv;
-    struct timeval start, compstart, conv, mag, sup, sort, doublethresh, edge, compend, end;
-    float sigma;
-    float a;
 
     if (comm_rank == 0) {
         if (argc != 3) {
@@ -105,25 +94,56 @@ int main(int argc, char *argv[]) {
     */
 
     if (comm_rank == 0) {
+        read_image_template(argv[1], &image.data, &image.width, &image.height);
         // begin time
         gettimeofday(&start, NULL);
-        read_image_template(argv[1], &image.data, &image.width, &image.height);
+        chunk.width = image.width;
+        chunk.height = (image.height / comm_size) + 2*g_size;
     }
-    img_prep(&image, &temp);
-    img_prep(&image, &vert);
-    img_prep(&image, &hori);
-    img_prep(&image, &magnitude);
-    img_prep(&image, &direction);
-    img_prep(&image, &supp);
-    img_prep(&image, &hyst);
+
+    MPI_Bcast(&chunk.width, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&chunk.height, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
     a = round(2.5 * sigma - 0.5);
+
+    //scatterv params
+    int *sendcounts,*displs;
+    int g_size = a / 2.0;
+    if(!comm_rank) {
+        sendcounts = (int *)calloc(comm_size, sizeof(int));
+        displs = (int *)calloc(comm_size), sizeof(int));
+    ​
+        displs[0] = 0;
+        sendcounts[0] = ((image.height/comm_size)+g_size)*image.width;
+    ​
+        for(size_t i=1;i<comm_size-1;i++) {
+            displs[i] = ((image.height/comm_size)*i-g_size)*image.width;
+            sendcounts[i] = ((image.height/comm_size)+2*g_size)*image.width;
+        }
+    ​
+        displs[comm_size-1] = ((image.height/comm_size)*(comm_size-1)-g_size)*image.width;
+        sendcounts[comm_size-1] = ((image.height/comm_size)+g_size)*image.width;
+    }
+
+    //Have processes write their chunks (image chunk+ghost rows)
+    //For Debugging only
+    char name[1000];
+    sprintf(name,"chunk_%d.pgm",comm_rank);
+    write_image_template<float>(name,chunk.data,chunk.width,chunk.height);
+
+    /*img_prep(&image, &vert);
+    img_prep(&image, &hori);
+    //img_prep(&image, &magnitude);
+    //img_prep(&image, &direction);
+    //img_prep(&image, &supp);
+    //img_prep(&image, &hyst);
+
     h_kern.w = 2 * a + 1;
     h_kern.data = (float*) calloc(h_kern.w, sizeof(float));
-    v_kern.w = 2 * a + 1;
-    v_kern.data = (float*) calloc(v_kern.w, sizeof(float));
     h_deriv.w = 2 * a + 1;
     h_deriv.data = (float*) calloc(h_deriv.w, sizeof(float));
+    v_kern.w = 2 * a + 1;
+    v_kern.data = (float*) calloc(v_kern.w, sizeof(float));
     v_deriv.w = 2 * a + 1;
     v_deriv.data = (float*) calloc(v_deriv.w, sizeof(float));
 
@@ -132,8 +152,9 @@ int main(int argc, char *argv[]) {
     gaussian_deriv(&h_deriv, sigma, a);
     gaussian_deriv(&v_deriv, sigma, a);
 
-    gettimeofday(&compstart, NULL);
-
+    if (comm_rank == 0) {
+        gettimeofday(&compstart, NULL);
+    }
     // horizontal
     h_conv(&image, &temp, &h_kern);
     h_conv(&temp, &hori, &h_deriv);
@@ -142,36 +163,46 @@ int main(int argc, char *argv[]) {
     v_conv(&image, &temp, &v_kern);
     v_conv(&temp, &vert, &v_deriv);
 
-    gettimeofday(&conv, NULL);
+    if (comm_rank == 0) {
+        gettimeofday(&conv, NULL);
+    }*/
 
-    // direction and magnitude
+    /*// direction and magnitude
     for(size_t i = 0; i < image.height * image.width; i++) {
         magnitude.data[i] = sqrt((hori.data[i] * hori.data[i]) + (vert.data[i] * vert.data[i]));
     }
     for(size_t i = 0; i < image.height * image.width; i++) {
         direction.data[i] = atan2(hori.data[i], vert.data[i]);
+    }*/
+
+    if (comm_rank == 0) {
+        gettimeofday(&mag, NULL);
     }
 
-    gettimeofday(&mag, NULL);
+    //suppression(&direction, &magnitude, &supp);
 
-    suppression(&direction, &magnitude, &supp);
+    if (comm_rank == 0) {
+        gettimeofday(&sup, NULL);
+    }
 
-    gettimeofday(&sup, NULL);
-
-    memcpy(temp.data, supp.data, sizeof(float) * supp.height * supp.width);
+    /*memcpy(temp.data, supp.data, sizeof(float) * supp.height * supp.width);
     mergeSort(temp.data, temp.width * temp.height, numthreads);
 
     float t_high = temp.data[(size_t) (temp.height * temp.width * 0.9)];
-    float t_low = t_high / 5.0;
+    float t_low = t_high / 5.0;*/
 
-    gettimeofday(&sort, NULL);
+    if (comm_rank == 0) {
+        gettimeofday(&sort, NULL);
+    }
 
-    memcpy(temp.data, supp.data, sizeof(float) * supp.height * supp.width);
-    hysteresis(&temp, t_high, t_low);
+    //memcpy(temp.data, supp.data, sizeof(float) * supp.height * supp.width);
+    //hysteresis(&temp, t_high, t_low);
 
-    gettimeofday(&doublethresh, NULL);
+    if (comm_rank == 0) {
+        gettimeofday(&doublethresh, NULL);
+    }
 
-    edge_linking(&temp, &hyst);
+    //edge_linking(&temp, &hyst);
 
     if (comm_rank == 0) {
         gettimeofday(&edge, NULL);
@@ -213,10 +244,10 @@ int main(int argc, char *argv[]) {
     free(temp.data);
     free(vert.data);
     free(hori.data);
-    free(magnitude.data);
-    free(direction.data);
-    free(hyst.data);
-    free(supp.data);
+    //free(magnitude.data);
+    //free(direction.data);
+    //free(hyst.data);
+    //free(supp.data);
     free(h_kern.data);
     free(v_kern.data);
     free(h_deriv.data);
@@ -227,10 +258,10 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-void img_prep(const img_s *orig, img_s *cpy) {
-    cpy->height = orig->height;
-    cpy->width = orig->width;
-    cpy->data = (float *) calloc(cpy->height * cpy ->width, sizeof(float));
+void img_prep(const img_s *img, int w, int h) {
+    img->height = w;
+    img->width = h;
+    img->data = (float *) calloc(img->height * img->width, sizeof(float));
 }
 
 void print_kern(kern_s *kern) {
