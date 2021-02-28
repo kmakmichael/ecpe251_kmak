@@ -43,6 +43,7 @@ void suppression(img_s *direction, img_s *magnitude, img_s *out_img);
 void hysteresis(img_s *img, float t_high, float t_low);
 void edge_linking(img_s *hyst, img_s *edges);
 float timecalc(struct timeval start, struct timeval end);
+void scatterv(int comm_size, int comm_rank, int g, img_s *send, img_s *recv);
 
 int main(int argc, char *argv[]) {
 
@@ -106,24 +107,7 @@ int main(int argc, char *argv[]) {
 
     a = round(2.5 * sigma - 0.5);
 
-    //scatterv params
-    int *sendcounts,*displs;
-    int g_size = a / 2.0;
-    if(!comm_rank) {
-        sendcounts = (int *)calloc(comm_size, sizeof(int));
-        displs = (int *)calloc(comm_size), sizeof(int));
-    ​
-        displs[0] = 0;
-        sendcounts[0] = ((image.height/comm_size)+g_size)*image.width;
-    ​
-        for(size_t i=1;i<comm_size-1;i++) {
-            displs[i] = ((image.height/comm_size)*i-g_size)*image.width;
-            sendcounts[i] = ((image.height/comm_size)+2*g_size)*image.width;
-        }
-    ​
-        displs[comm_size-1] = ((image.height/comm_size)*(comm_size-1)-g_size)*image.width;
-        sendcounts[comm_size-1] = ((image.height/comm_size)+g_size)*image.width;
-    }
+    scatterv();
 
     //Have processes write their chunks (image chunk+ghost rows)
     //For Debugging only
@@ -258,7 +242,7 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-void img_prep(const img_s *img, int w, int h) {
+void img_prep(img_s *img, int w, int h) {
     img->height = w;
     img->width = h;
     img->data = (float *) calloc(img->height * img->width, sizeof(float));
@@ -488,4 +472,30 @@ void edge_linking(img_s *hyst, img_s *edges) {
 float timecalc(struct timeval start, struct timeval end) {
     float ns = (end.tv_sec * 1000000 + end.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec);
     return ns / 1000.0;
+}
+
+void scatterv(int comm_size, int comm_rank, int g, img_s *send, img_s *recv) {
+    //scatterv params
+    int *sendcounts,*displs;
+    if(!comm_rank) {
+        sendcounts = (int *)calloc(comm_size, sizeof(int));
+        displs = (int *)calloc(comm_size), sizeof(int));
+    ​
+        displs[0] = 0;
+        sendcounts[0] = ((send->height/comm_size)+g)*send->width;
+    ​
+        for(size_t i=1;i<comm_size-1;i++) {
+            displs[i] = ((send->height/comm_size)*i-g)*send->width;
+            sendcounts[i] = ((send->height/comm_size)+2*g)*send->width;
+        }
+    ​
+        displs[comm_size-1] = ((send->height/comm_size)*(comm_size-1)-g)*send->width;
+        sendcounts[comm_size-1] = ((send->height/comm_size)+g)*send->width;
+    }
+    if(comm_rank==0)
+        MPI_Scatterv(send,sendcounts,displs,MPI_FLOAT,recv,(send->height/comm_size+g)*send->width,MPI_FLOAT,0,MPI_COMM_WORLD); 
+    else if (comm_rank==comm_size-1)
+        MPI_Scatterv(send,sendcounts,displs,MPI_FLOAT,recv,(send->height/comm_size+g)*send->width,MPI_FLOAT,0,MPI_COMM_WORLD); 
+    else
+	    MPI_Scatterv(send,sendcounts,displs,MPI_FLOAT,recv,(send->height/comm_size+2*g)*send->width,MPI_FLOAT,0,MPI_COMM_WORLD);
 }
