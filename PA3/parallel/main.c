@@ -18,7 +18,7 @@ usage: ./canny <image path> <sigma> <num threads>
 #include "sort.h"
 #include "image_template.h"
 
-#define timing_mode 1
+#define timing_mode 0
 
 // structs
 typedef struct {
@@ -26,6 +26,15 @@ typedef struct {
     int width;
     int height;
 } img_s;
+
+typedef struct {
+    float *top_ghost;
+    float *data;
+    float *btm_ghost;
+    int width;
+    int g; // length of ghost rows
+    int d; // length of data
+} chunk_s;
 
 typedef struct {
     float *data;
@@ -37,6 +46,7 @@ void gaussian_kern(kern_s *kern, float sigma, float a);
 void gaussian_deriv(kern_s *kern, float sigma, float a);
 void kerninit(kern_s *kern);
 void img_prep(const img_s *orig, img_s *cpy);
+void chunk_prep(const chunk_s *base, chunk_s *cpy);
 void h_conv(img_s *in_img, img_s *out_img, const kern_s *kern);
 void v_conv(img_s *in_img, img_s *out_img, const kern_s *kern);
 void suppression(img_s *direction, img_s *magnitude, img_s *out_img);
@@ -44,16 +54,16 @@ void hysteresis(img_s *img, float t_high, float t_low);
 void edge_linking(img_s *hyst, img_s *edges);
 float timecalc(struct timeval start, struct timeval end);
 void scatterv(int comm_size, int comm_rank, int g, img_s *send, img_s *recv);
+void ghost_exchange(chunk_s *chunk);
 
 int main(int argc, char *argv[]) {
 
     // rank 0 only
-    img_s image, temp, vert, hori, magnitude, direction, supp, hyst;
+    img_s image;
     struct timeval start, compstart, conv, mag, sup, sort, doublethresh, edge, compend, end;
 
     // all ranks
-    img_s chunk_in; // data is scattered into here
-    img_s chunk_out; // data is gathered from here
+    chunk_s orig, temp, hori, vert, direction, magnitude, supp, hyst;
     kern_s h_kern, v_kern, h_deriv, v_deriv;
     float sigma;
     float a;
@@ -107,28 +117,63 @@ int main(int argc, char *argv[]) {
     
     MPI_Bcast(&image.width, 1, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(&image.height, 1, MPI_INT, 0, MPI_COMM_WORLD);
+   
+    // calc chunk size
+    orig.width = image.width;
+    orig.d = image.height / comm_size;
+    orig.g = ceil(a/2.0);
+    orig.data = (float *) calloc(orig.d * orig.width, sizeof(float));
+    orig.top_ghost = (float *) calloc(orig.g * orig.width, sizeof(float));
+    orig.btm_ghost = (float *) calloc(orig.g * orig.width, sizeof(float));    
     
-    chunk.width = image.width;
-    chunk.height = (image.height / comm_size) + 2*floor(a/2);
-    chunk.data = (float *) calloc(chunk.width * chunk.height, sizeof(float));
-    
+    printf("chunk data for rank %d: d:%d, g:%d, w:%d\n", comm_rank, orig.d, orig.g, orig.width);
+
+    // prep all chunks
+    chunk_prep(&orig, &hori);
+    chunk_prep(&orig, &vert);
+    chunk_prep(&orig, &direction);
+    chunk_prep(&orig, &magnitude);
+    chunk_prep(&orig, &supp);
+    chunk_prep(&orig, &hyst);
+ 
+    printf("rank %d allocated for chunks\n", comm_rank);
+
+    rc = MPI_Barrier(MPI_COMM_WORLD);
     if (!comm_rank)
         printf("begin scatterv\n");
-    scatterv(comm_size, comm_rank, floor(a/2.0), &image, &chunk);
+    //scatterv(comm_size, comm_rank, floor(a/2.0), &image, &orig);
+    MPI_Scatter(image.data, image.width * orig.d, MPI_FLOAT, 
+                orig.data, orig.width * orig.d, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
-    //Have processes write their chunks (image chunk+ghost rows)
-    //For Debugging only
+    // fill the ghost rows with arbitrary data for testing
+    for (int i = 0; i < orig.width * orig.g; i++) {
+        orig.top_ghost[i] = 0;
+        orig.btm_ghost[i] = 255;
+    }
+
+    // debug: write the ghost rows
+    //  these should be black on top, white/gray on bottom
     char name[1000];
-    sprintf(name,"chunk_%d.pgm",comm_rank);
-    write_image_template<float>(name,chunk.data,chunk.width,chunk.height);
- 
-    /*img_prep(&image, &vert);
-    img_prep(&image, &hori);
-    //img_prep(&image, &magnitude);
-    //img_prep(&image, &direction);
-    //img_prep(&image, &supp);
-    //img_prep(&image, &hyst);
+    sprintf(name, "chunk_pre_%d.pgm", comm_rank);
+    write_image_template<float>(name, orig.data, orig.width, orig.d);
+    sprintf(name, "top_ghost_pre_%d.pgm", comm_rank);
+    write_image_template<float>(name, orig.top_ghost, orig.width, orig.g);
+    sprintf(name, "btm_ghost_pre_%d.pgm", comm_rank);
+    write_image_template<float>(name, orig.btm_ghost, orig.width, orig.g);
 
+    // exchange ghost rows
+    ghost_exchange(&orig); 
+    
+    // debug: write the ghost rows
+    //  these should contain the actual image data
+    sprintf(name, "chunk_post_%d.pgm", comm_rank);
+    write_image_template<float>(name, orig.data, orig.width, orig.d);
+    sprintf(name, "top_ghost_post_%d.pgm", comm_rank);
+    write_image_template<float>(name, orig.top_ghost, orig.width, orig.g);
+    sprintf(name, "btm_ghost_post_%d.pgm", comm_rank);
+    write_image_template<float>(name, orig.btm_ghost, orig.width, orig.g);
+
+    /*
     h_kern.w = 2 * a + 1;
     h_kern.data = (float*) calloc(h_kern.w, sizeof(float));
     h_deriv.w = 2 * a + 1;
@@ -150,7 +195,7 @@ int main(int argc, char *argv[]) {
     h_conv(&image, &temp, &h_kern);
     h_conv(&temp, &hori, &h_deriv);
 
-    // vertical
+    //vertical
     v_conv(&image, &temp, &v_kern);
     v_conv(&temp, &vert, &v_deriv);
     */
@@ -202,12 +247,18 @@ int main(int argc, char *argv[]) {
 
         // stop time
         gettimeofday(&compend, NULL);
+    }
 
-        write_image_template("direction.pgm", direction.data, direction.width, direction.height);
-        write_image_template("magnitude.pgm", magnitude.data, magnitude.width, magnitude.height);
-        write_image_template("suppression.pgm", supp.data, supp.width, supp.height);
-        write_image_template("hysteresis.pgm", hyst.data, hyst.width, hyst.height);
-
+    /*
+    MPI_Gather(&direction.data, direction.g * direction.width, MPI_FLOAT, 
+        &image.data, image.width * image.height, MPI_FLOAT, 0, MPI_COMM_WORLD);
+    if (!comm_rank)
+        write_image_template("direction.pgm", image.data, image.width, image.height);
+    //write_image_template("magnitude.pgm", magnitude.data, magnitude.width, magnitude.height);
+    //write_image_template("suppression.pgm", supp.data, supp.width, supp.height);
+    //write_image_template("hysteresis.pgm", hyst.data, hyst.width, hyst.height);
+    */
+    if (!comm_rank) {
         gettimeofday(&end, NULL);
 
         printf("%d, %.1f, %zu, %.1f, %.1f\n", 
@@ -233,15 +284,16 @@ int main(int argc, char *argv[]) {
         }
     }
     
-    free(chunk.data);
     if (!comm_rank)
         free(image.data);
-    //free(vert.data);
-    //free(hori.data);
-    //free(magnitude.data);
-    //free(direction.data);
-    //free(hyst.data);
-    //free(supp.data);
+    
+    free(orig.data);
+    free(temp.data);
+    free(hori.data);
+    free(magnitude.data);
+    free(direction.data);
+    free(hyst.data);
+    free(supp.data);
     //free(h_kern.data);
     //free(v_kern.data);
     //free(h_deriv.data);
@@ -257,6 +309,18 @@ void img_prep(const img_s *orig, img_s *cpy) {
     cpy->width = orig->width;
     cpy->data = (float *) calloc(cpy->height * cpy->width, sizeof(float));
 }
+
+
+void chunk_prep(const chunk_s *orig, chunk_s *cpy) {
+    cpy->width = orig->width;
+    cpy->d = orig->d;
+    cpy->g = orig->g;
+    cpy->data = (float *) calloc(cpy->width * cpy->d, sizeof(float));
+    cpy->top_ghost = (float *) calloc(cpy->width * cpy->g, sizeof(float));
+    cpy->btm_ghost = (float *) calloc(cpy->width * cpy->g, sizeof(float));
+}
+
+
 
 void print_kern(kern_s *kern) {
     for(size_t i = 0; i < kern->w; i++) {
@@ -482,6 +546,31 @@ void edge_linking(img_s *hyst, img_s *edges) {
 float timecalc(struct timeval start, struct timeval end) {
     float ns = (end.tv_sec * 1000000 + end.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec);
     return ns / 1000.0;
+}
+
+
+void ghost_exchange(chunk_s *chunk) {
+    MPI_Status status;
+    
+    int size, rank;
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    
+    // send bottom downwards
+    if (rank != size - 1) {
+        MPI_Send(&chunk->data[chunk->width * (chunk->d - chunk->g)], chunk->width * chunk->g, MPI_FLOAT, rank + 1, 0, MPI_COMM_WORLD);
+    }
+    if (rank) {
+        MPI_Recv(chunk->top_ghost, chunk->width * chunk->g, MPI_FLOAT, rank - 1, 0, MPI_COMM_WORLD, &status);
+    }
+
+    // send top upwards
+    if (rank) {
+        MPI_Send(chunk->data, chunk->width * chunk->g, MPI_FLOAT, rank - 1, 1, MPI_COMM_WORLD);
+    }    
+    if (rank != size - 1) {
+        MPI_Recv(chunk->btm_ghost, chunk->width * chunk->g, MPI_FLOAT, rank + 1, 1, MPI_COMM_WORLD, &status);
+    }
 }
 
 void scatterv(int comm_size, int comm_rank, int g, img_s *send, img_s *recv) {
