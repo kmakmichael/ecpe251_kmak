@@ -53,68 +53,71 @@ int main(int argc, char *argv[]) {
     struct timeval start, compstart, conv, mag, sup, sort, doublethresh, edge, compend, end;
     float sigma;
     float a;
-    size_t numthreads;
+    size_t threadcount;
     int comm_size;
     int comm_rank;
     int rc;
 
     rc = MPI_Init(&argc, &argv);
     if (rc != MPI_SUCCESS) {
+        fprintf(stderr, "something bad i dont know\n");
         MPI_Abort(MPI_COMM_WORLD, rc);
     }
 
     MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
 
-    if (comm_rank == 0) {
-        if (argc != 3) {
-            fprintf(stderr, "usage: canny <image path> <sigma>\n");
-            MPI_Abort(MPI_COMM_WORLD, MPI_ERR_ARG);
-            return -1;
-        }
-        sigma = atof(argv[2]);
+    // argparse
+    sigma = atof(argv[2]);
+    threadcount = 1; //atoi(argv[3]);
+    
+    // check args
+    if (!comm_rank) {
         if (sigma <= 0) {
             fprintf(stderr, "invalid sigma: %s\n", argv[2]);
             MPI_Abort(MPI_COMM_WORLD, MPI_ERR_ARG);
             return -1;
         }
-    }
-    numthreads = 1; //atoi(argv[3]);
-    if (numthreads <= 0) {
-            fprintf(stderr, "invalid number of threads: %s\n", argv[3]);
+        if (threadcount <= 0) {
+            fprintf(stderr, "invalid number of OMP Threads: %s\n", argv[3]);
             MPI_Abort(MPI_COMM_WORLD, MPI_ERR_ARG);
             return -1;
-        }
-    /*
-    if (numthreads > omp_get_num_procs()) {
-        fprintf(stderr, "trying to use more threads than processors\n");
-        MPI_Abort(MPI_COMM_WORLD, rc);
-        return -1;
+        } 
+        /*
+        if (numthreads > omp_get_num_procs()) {
+            fprintf(stderr, "trying to use more threads than processors\n");
+            MPI_Abort(MPI_COMM_WORLD, rc);
+            return -1;
+        }*/
     }
-    omp_set_num_threads(numthreads);
-    */
 
+    //omp_set_num_threads(numthreads);
+    
     if (comm_rank == 0) {
         read_image_template(argv[1], &image.data, &image.width, &image.height);
         // begin time
         gettimeofday(&start, NULL);
-        chunk.width = image.width;
-        chunk.height = (image.height / comm_size) + 2*g_size;
     }
-
-    MPI_Bcast(&chunk.width, 1, MPI_INT, 0, MPI_COMM_WORLD);
-    MPI_Bcast(&chunk.height, 1, MPI_INT, 0, MPI_COMM_WORLD);
-
+    
     a = round(2.5 * sigma - 0.5);
-
-    scatterv();
+    
+    MPI_Bcast(&image.width, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&image.height, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    
+    chunk.width = image.width;
+    chunk.height = (image.height / comm_size) + 2*floor(a/2);
+    chunk.data = (float *) calloc(chunk.width * chunk.height, sizeof(float));
+    
+    if (!comm_rank)
+        printf("begin scatterv\n");
+    scatterv(comm_size, comm_rank, floor(a/2.0), &image, &chunk);
 
     //Have processes write their chunks (image chunk+ghost rows)
     //For Debugging only
     char name[1000];
     sprintf(name,"chunk_%d.pgm",comm_rank);
     write_image_template<float>(name,chunk.data,chunk.width,chunk.height);
-
+    
     /*img_prep(&image, &vert);
     img_prep(&image, &hori);
     //img_prep(&image, &magnitude);
@@ -135,21 +138,21 @@ int main(int argc, char *argv[]) {
     gaussian_kern(&v_kern, sigma, a);
     gaussian_deriv(&h_deriv, sigma, a);
     gaussian_deriv(&v_deriv, sigma, a);
-
+    */
     if (comm_rank == 0) {
         gettimeofday(&compstart, NULL);
     }
-    // horizontal
+    /*// horizontal
     h_conv(&image, &temp, &h_kern);
     h_conv(&temp, &hori, &h_deriv);
 
     // vertical
     v_conv(&image, &temp, &v_kern);
     v_conv(&temp, &vert, &v_deriv);
-
+    */
     if (comm_rank == 0) {
         gettimeofday(&conv, NULL);
-    }*/
+    }
 
     /*// direction and magnitude
     for(size_t i = 0; i < image.height * image.width; i++) {
@@ -187,7 +190,9 @@ int main(int argc, char *argv[]) {
     }
 
     //edge_linking(&temp, &hyst);
-
+    
+    MPI_Barrier(MPI_COMM_WORLD);
+    
     if (comm_rank == 0) {
         gettimeofday(&edge, NULL);
 
@@ -204,7 +209,7 @@ int main(int argc, char *argv[]) {
         printf("%d, %.1f, %zu, %.1f, %.1f\n", 
             image.height, 
             sigma, 
-            numthreads, 
+        threadcount, 
             timecalc(compstart, end), 
             timecalc(start, end)
         );
@@ -223,19 +228,20 @@ int main(int argc, char *argv[]) {
             );
         }
     }
-
-    free(image.data);
-    free(temp.data);
-    free(vert.data);
-    free(hori.data);
+    
+    free(chunk.data);
+    if (!comm_rank)
+        free(image.data);
+    //free(vert.data);
+    //free(hori.data);
     //free(magnitude.data);
     //free(direction.data);
     //free(hyst.data);
     //free(supp.data);
-    free(h_kern.data);
-    free(v_kern.data);
-    free(h_deriv.data);
-    free(v_deriv.data);
+    //free(h_kern.data);
+    //free(v_kern.data);
+    //free(h_deriv.data);
+    //free(v_deriv.data);
 
     MPI_Finalize();
 
@@ -479,23 +485,20 @@ void scatterv(int comm_size, int comm_rank, int g, img_s *send, img_s *recv) {
     int *sendcounts,*displs;
     if(!comm_rank) {
         sendcounts = (int *)calloc(comm_size, sizeof(int));
-        displs = (int *)calloc(comm_size), sizeof(int));
-    ​
+        displs = (int *)calloc(comm_size, sizeof(int));
         displs[0] = 0;
         sendcounts[0] = ((send->height/comm_size)+g)*send->width;
-    ​
-        for(size_t i=1;i<comm_size-1;i++) {
+        for(int i=1;i<comm_size-1;i++) {
             displs[i] = ((send->height/comm_size)*i-g)*send->width;
             sendcounts[i] = ((send->height/comm_size)+2*g)*send->width;
         }
-    ​
         displs[comm_size-1] = ((send->height/comm_size)*(comm_size-1)-g)*send->width;
         sendcounts[comm_size-1] = ((send->height/comm_size)+g)*send->width;
     }
     if(comm_rank==0)
-        MPI_Scatterv(send,sendcounts,displs,MPI_FLOAT,recv,(send->height/comm_size+g)*send->width,MPI_FLOAT,0,MPI_COMM_WORLD); 
+        MPI_Scatterv(send->data,sendcounts,displs,MPI_FLOAT,recv->data,(send->height/comm_size+g)*send->width,MPI_FLOAT,0,MPI_COMM_WORLD);
     else if (comm_rank==comm_size-1)
-        MPI_Scatterv(send,sendcounts,displs,MPI_FLOAT,recv,(send->height/comm_size+g)*send->width,MPI_FLOAT,0,MPI_COMM_WORLD); 
+        MPI_Scatterv(send->data,sendcounts,displs,MPI_FLOAT,recv->data,(send->height/comm_size+g)*send->width,MPI_FLOAT,0,MPI_COMM_WORLD);
     else
-	    MPI_Scatterv(send,sendcounts,displs,MPI_FLOAT,recv,(send->height/comm_size+2*g)*send->width,MPI_FLOAT,0,MPI_COMM_WORLD);
+	    MPI_Scatterv(send->data,sendcounts,displs,MPI_FLOAT,recv->data,(send->height/comm_size+2*g)*send->width,MPI_FLOAT,0,MPI_COMM_WORLD);
 }
