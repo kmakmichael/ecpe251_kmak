@@ -48,8 +48,8 @@ void chunk_prep(const chunk_s *base, chunk_s *cpy);
 void h_conv(const chunk_s *in_img, chunk_s *out_img, const kern_s *kern);
 void v_conv(const chunk_s *in_img, chunk_s *out_img, const kern_s *kern);
 void suppression(const chunk_s *direction, const chunk_s *magnitude, chunk_s *out_img);
-void hysteresis(img_s *img, float t_high, float t_low);
-void edge_linking(img_s *hyst, img_s *edges);
+void hysteresis(chunk_s *hyst, float t_high, float t_low);
+void edge_linking(const chunk_s *hyst, chunk_s *edges);
 float timecalc(struct timeval start, struct timeval end);
 void gather_and_save(const img_s *image, const chunk_s *chunk, char *filename);
 void ghost_exchange(chunk_s *chunk);
@@ -130,7 +130,7 @@ int main(int argc, char *argv[]) {
     chunk_prep(&orig, &direction);
     chunk_prep(&orig, &magnitude);
     chunk_prep(&orig, &supp);
-    //chunk_prep(&orig, &hyst);
+    chunk_prep(&orig, &hyst);
  
     rc = MPI_Barrier(MPI_COMM_WORLD);
     MPI_Scatter(image.data, image.width * orig.d, MPI_FLOAT, 
@@ -193,24 +193,29 @@ int main(int argc, char *argv[]) {
     MPI_Gather(&supp.data[supp.w * supp.g], supp.d * supp.w, MPI_FLOAT, 
         image.data, supp.d * supp.w, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
-    if (!comm_rank)
+    float t_high;
+    if (!comm_rank) {
         mergeSort(image.data, image.width * image.height, threadcount);
+        t_high = image.data[(size_t) (image.height * image.width * 0.9)];
+    }
 
-    float t_high = image.data[(size_t) (image.height * image.width * 0.9)];
-    float t_low = t_high / 5.0;
+    MPI_Bcast(&t_high, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
     if (!comm_rank) {
         gettimeofday(&sort, NULL);
     }
-
-    //memcpy(temp.data, supp.data, sizeof(float) * supp.height * supp.width);
-    //hysteresis(&temp, t_high, t_low);
+    
+    ghost_exchange(&supp);
+    memcpy(temp.data, supp.data, sizeof(float) * (supp.d + 2*supp.g) * supp.w);
+    ghost_exchange(&temp); 
+    hysteresis(&temp, t_high, t_high/5.0);
 
     if (!comm_rank) {
         gettimeofday(&doublethresh, NULL);
     }
 
-    //edge_linking(&temp, &hyst);
+    ghost_exchange(&temp);
+    edge_linking(&temp, &hyst);
     
     MPI_Barrier(MPI_COMM_WORLD);
     
@@ -227,6 +232,7 @@ int main(int argc, char *argv[]) {
     gather_and_save(&image, &direction, "direction.pgm");
     gather_and_save(&image, &magnitude, "magnitude.pgm");
     gather_and_save(&image, &supp, "suppression.pgm");
+    gather_and_save(&image, &hyst, "edge_linking.pgm");
 
     if (!comm_rank) {
         gettimeofday(&end, NULL);
@@ -264,7 +270,7 @@ int main(int argc, char *argv[]) {
     free(magnitude.data);
     free(direction.data);
     free(supp.data);
-    //free(hyst.data);
+    free(hyst.data);
     free(h_kern.data);
     free(v_kern.data);
     free(h_deriv.data);
@@ -432,71 +438,62 @@ void suppression(const chunk_s *direction, const chunk_s *magnitude, chunk_s *su
     #undef Gxy
 }
 
-void hysteresis(img_s *img, float t_high, float t_low) {
-    size_t bounds = img->height * img-> width;
-    for(size_t i = 0; i < bounds; i++) {
-        if (img->data[i] >= t_high) {
-            img->data[i] = 255;
-        } else if (img->data[i] <= t_low) {
-            img->data[i] = 0;
+
+void hysteresis(chunk_s *hyst, float t_high, float t_low) {
+    size_t bounds = hyst->w * (hyst->g + hyst->d);
+    for (size_t i = hyst->g * hyst->w; i < bounds; i++) {
+        if (hyst->data[i] >= t_high) {
+            hyst->data[i] = 255;
+        } else if (hyst->data[i] <= t_low) {
+            hyst->data[i] = 0;
         } else {
-            img->data[i] = 125;
+            hyst->data[255] = 125;
         }
     }
 }
 
-void edge_linking(img_s *hyst, img_s *edges) {
-    size_t bounds = hyst->height * hyst-> width;
-    size_t width = hyst->width;
+
+
+void edge_linking(const chunk_s *hyst, chunk_s *edges) {
+    size_t bounds = (hyst->g + hyst->d) * hyst->w;
+    size_t width = hyst->w;
     size_t btm_right = width + 1;
     size_t btm_left = width - 1;
-    for (size_t i = 0 ; i < bounds; i++) {
+    for (size_t i = hyst->g * hyst->w; i < bounds; i++) {
         if(hyst->data[i] == 125) {
             edges->data[i] = 0;
-            // topleft
-            if (i >= width && i % width > 0) {
-                if (hyst->data[i - btm_right] == 255) {
-                    edges->data[i] = 255;
-                }
+            // bottom
+            if (hyst->data[i + width] == 255) {
+                edges->data[i] = 255;
             }
             // top
-            if (i >= width) {
-                if (hyst->data[i - width] == 255) {
-                    edges->data[i] = 255;
-                }
+            if (hyst->data[i - width] == 255) {
+                edges->data[i] = 255;
             }
-            // topright
-            if (i >= width && i % width < width-1) {
-                if (hyst->data[i - btm_left] == 255) {
-                    edges->data[i] = 255;
-                }
-            }
-            // left
             if (i % width > 0) {
+                // left
                 if (hyst->data[i - 1] == 255) {
                     edges->data[i] = 255;
                 }
-            }
-            // right
-            if (i % width > width-1) {
-                if (hyst->data[i + 1] == 255) {
+                // topleft
+                if (hyst->data[i - btm_right] == 255) {
                     edges->data[i] = 255;
                 }
-            }
-            // bottomleft
-            if (i < bounds - width && i % width > 0) {
+                // bottomleft
                 if (hyst->data[i + btm_left] == 255) {
                     edges->data[i] = 255;
                 }
             }
-            // bottom
-            if (i < bounds - width) {
-                if (hyst->data[i + width] == 255) {
+            if (i % width > width-1) {
+                // right
+                if (hyst->data[i + 1] == 255) {
                     edges->data[i] = 255;
                 }
-            }
-            // bottomright
-            if (i < bounds - width && i % width < width-1) {
+                // topright
+                if (hyst->data[i - btm_left] == 255) {
+                    edges->data[i] = 255;
+                }
+                // bottomright
                 if (hyst->data[i + btm_right] == 255) {
                     edges->data[i] = 255;
                 }
