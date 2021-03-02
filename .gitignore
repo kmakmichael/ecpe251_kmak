@@ -6,6 +6,7 @@
 
 # report
 *.zip
+*.csv
 
 # slurm stuff
 *.sh.*
