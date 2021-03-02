@@ -549,18 +549,18 @@ void ghost_exchange(chunk_s *chunk) {
     
     // send bottom downwards
     if (rank != size - 1) {
-        MPI_Send(&chunk->data[chunk->w * chunk->d], chunk->w * chunk->g, MPI_FLOAT, rank + 1, 0, MPI_COMM_WORLD);
+        MPI_Send(&chunk->data[chunk->d * chunk->w], chunk->w * chunk->g, MPI_FLOAT, rank + 1, 0, MPI_COMM_WORLD);
     }
     if (rank) {
-        MPI_Recv(&chunk->data[chunk->w * chunk->g], chunk->w * chunk->g, MPI_FLOAT, rank - 1, 0, MPI_COMM_WORLD, &status);
+        MPI_Recv(chunk->data, chunk->w * chunk->g, MPI_FLOAT, rank - 1, 0, MPI_COMM_WORLD, &status);
     }
 
     // send top upwards
     if (rank) {
-        MPI_Send(&chunk->data[chunk->w * chunk->g], chunk->w * chunk->g, MPI_FLOAT, rank - 1, 1, MPI_COMM_WORLD);
+        MPI_Send(&chunk->data[chunk->g * chunk->w], chunk->w * chunk->g, MPI_FLOAT, rank - 1, 1, MPI_COMM_WORLD);
     }    
     if (rank != size - 1) {
-        MPI_Recv(&chunk->data[chunk->w * chunk->g], chunk->w * chunk->g, MPI_FLOAT, rank + 1, 1, MPI_COMM_WORLD, &status);
+        MPI_Recv(&chunk->data[(chunk->g + chunk->d) * chunk->w], chunk->w * chunk->g, MPI_FLOAT, rank + 1, 1, MPI_COMM_WORLD, &status);
     }
 }
 
