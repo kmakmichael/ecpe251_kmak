@@ -18,7 +18,7 @@ usage: ./canny <image path> <sigma> <num threads>
 #include "sort.h"
 #include "image_template.h"
 
-#define timing_mode 0
+#define timing_mode 1
 
 // structs
 typedef struct {
@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
 
     // rank 0 only
     img_s image;
-    struct timeval start, compstart, conv, mag, sup, sort, doublethresh, edge, compend, end;
+    struct timeval start, compstart, conv, mag, sup, sort, doublethresh, compend, end;
 
     // all ranks
     chunk_s orig, temp, hori, vert, direction, magnitude, supp, hyst;
@@ -151,9 +151,9 @@ int main(int argc, char *argv[]) {
     gaussian_deriv(&h_deriv, sigma, a);
     gaussian_deriv(&v_deriv, sigma, a);
 
-    if (!comm_rank) {
+    if (!comm_rank)
         gettimeofday(&compstart, NULL);
-    }
+    
     // horizontal
     h_conv(&orig, &temp, &h_kern);
     ghost_exchange(&temp);
@@ -164,9 +164,8 @@ int main(int argc, char *argv[]) {
     ghost_exchange(&temp);
     v_conv(&temp, &vert, &v_deriv);
     
-    if (!comm_rank) {
+    if (!comm_rank)
         gettimeofday(&conv, NULL);
-    }
 
     // direction and magnitude
     ghost_exchange(&vert);
@@ -178,61 +177,52 @@ int main(int argc, char *argv[]) {
         direction.data[i] = atan2(hori.data[i], vert.data[i]);
     }
 
-    if (!comm_rank) {
+    if (!comm_rank)
         gettimeofday(&mag, NULL);
-    }
 
     ghost_exchange(&magnitude);
     ghost_exchange(&direction);
     suppression(&direction, &magnitude, &supp);
 
-    if (!comm_rank) {
+    if (!comm_rank)
         gettimeofday(&sup, NULL);
-    }
     
     MPI_Gather(&supp.data[supp.w * supp.g], supp.d * supp.w, MPI_FLOAT, 
         image.data, supp.d * supp.w, MPI_FLOAT, 0, MPI_COMM_WORLD);
-
-    if (!comm_rank) {
-        gettimeofday(&sort, NULL);
-    }
 
     float t_high;
     if (!comm_rank) {
         mergeSort(image.data, image.width * image.height, threadcount);
         t_high = image.data[(size_t) (image.height * image.width * 0.9)];
     }
+ 
+    if (!comm_rank)
+        gettimeofday(&sort, NULL);
 
     MPI_Bcast(&t_high, 1, MPI_INT, 0, MPI_COMM_WORLD);
  
     ghost_exchange(&supp);
     memcpy(temp.data, supp.data, sizeof(float) * (supp.d + 2*supp.g) * supp.w);
-    ghost_exchange(&temp); 
+    //ghost_exchange(&temp); 
     hysteresis(&temp, t_high, t_high/5.0);
 
-    if (!comm_rank) {
+    if (!comm_rank)
         gettimeofday(&doublethresh, NULL);
-    }
 
     ghost_exchange(&temp);
     edge_linking(&temp, &hyst);
     
-    MPI_Barrier(MPI_COMM_WORLD);
-    
-    if (!comm_rank) {
-        gettimeofday(&edge, NULL);
-
-        // stop time
+    // stop time
+    if (!comm_rank)
         gettimeofday(&compend, NULL);
-    }
    
-    gather_and_save(&image, &orig, "original.pgm");
+    /*gather_and_save(&image, &orig, "original.pgm");
     gather_and_save(&image, &hori, "horizontal.pgm");
     gather_and_save(&image, &vert, "vertical.pgm");
     gather_and_save(&image, &direction, "direction.pgm");
     gather_and_save(&image, &magnitude, "magnitude.pgm");
-    gather_and_save(&image, &supp, "suppression.pgm");
-    gather_and_save(&image, &hyst, "edge_linking.pgm");
+    gather_and_save(&image, &supp, "suppression.pgm");*/
+    gather_and_save(&image, &hyst, "output.pgm");
 
     if (!comm_rank) {
         gettimeofday(&end, NULL);
@@ -254,7 +244,7 @@ int main(int argc, char *argv[]) {
                 timecalc(mag, sup), // sup_time
                 timecalc(sup, sort), // sort_time
                 timecalc(sort, doublethresh), // doublethresh_time
-                timecalc(doublethresh, edge), // edge_time
+                timecalc(doublethresh, compend), // edge_time
                 timecalc(start, end) // total_time
             );
         }
