@@ -45,7 +45,7 @@ void gaussian_deriv(kern_s *kern, float sigma, float a);
 void kerninit(kern_s *kern);
 void img_prep(const img_s *orig, img_s *cpy);
 void chunk_prep(const chunk_s *base, chunk_s *cpy);
-void h_conv(img_s *in_img, img_s *out_img, const kern_s *kern);
+void h_conv(const chunk_s *in_img, chunk_s *out_img, const kern_s *kern);
 void v_conv(img_s *in_img, img_s *out_img, const kern_s *kern);
 void suppression(img_s *direction, img_s *magnitude, img_s *out_img);
 void hysteresis(img_s *img, float t_high, float t_low);
@@ -123,11 +123,9 @@ int main(int argc, char *argv[]) {
     
     orig.data = (float *) calloc((orig.d + 2*orig.g) * orig.w, sizeof(float));
  
-    printf("chunk data for rank %d: d:%d, g:%d, w:%d\n", comm_rank, orig.d, orig.g, orig.w);
-
     // prep all chunks
     chunk_prep(&orig, &temp);
-    //chunk_prep(&orig, &hori);
+    chunk_prep(&orig, &hori);
     //chunk_prep(&orig, &vert);
     //chunk_prep(&orig, &direction);
     //chunk_prep(&orig, &magnitude);
@@ -138,7 +136,9 @@ int main(int argc, char *argv[]) {
     //scatterv(comm_size, comm_rank, floor(a/2.0), &image, &orig);
     MPI_Scatter(image.data, image.width * orig.d, MPI_FLOAT, 
         &orig.data[orig.w * orig.g], orig.w * orig.d, MPI_FLOAT, 0, MPI_COMM_WORLD);
-    
+    ghost_exchange(&orig);
+ 
+    /*
     // fill the ghost rows with arbitrary data for testing
     for (int i = 0; i < orig.w * orig.g; i++) {
         orig.data[i] = 0;
@@ -166,7 +166,8 @@ int main(int argc, char *argv[]) {
     write_image_template<float>(name, orig.data, orig.w, orig.g);
     sprintf(name, "btm_ghost_post_%d.pgm", comm_rank);
     write_image_template<float>(name, &orig.data[(orig.d + orig.g) * orig.w], orig.w, orig.g);
-    /*
+    */
+
     h_kern.w = 2 * a + 1;
     h_kern.data = (float*) calloc(h_kern.w, sizeof(float));
     h_deriv.w = 2 * a + 1;
@@ -180,15 +181,17 @@ int main(int argc, char *argv[]) {
     gaussian_kern(&v_kern, sigma, a);
     gaussian_deriv(&h_deriv, sigma, a);
     gaussian_deriv(&v_deriv, sigma, a);
-    */
+
     if (!comm_rank) {
         gettimeofday(&compstart, NULL);
     }
-    /*// horizontal
-    h_conv(&image, &temp, &h_kern);
+    // horizontal
+    h_conv(&orig, &temp, &h_kern);
+    ghost_exchange(&temp);
     h_conv(&temp, &hori, &h_deriv);
+    ghost_exchange(&hori);
 
-    //vertical
+    /*//vertical
     v_conv(&image, &temp, &v_kern);
     v_conv(&temp, &vert, &v_deriv);
     */
@@ -242,15 +245,27 @@ int main(int argc, char *argv[]) {
         gettimeofday(&compend, NULL);
     }
 
-    /* must change!
-    MPI_Gather(&direction.data, direction.g * direction.width, MPI_FLOAT, 
-        &image.data, image.width * image.height, MPI_FLOAT, 0, MPI_COMM_WORLD);
     if (!comm_rank)
-        write_image_template("direction.pgm", image.data, image.width, image.height);
-    //write_image_template("magnitude.pgm", magnitude.data, magnitude.width, magnitude.height);
-    //write_image_template("suppression.pgm", supp.data, supp.width, supp.height);
-    //write_image_template("hysteresis.pgm", hyst.data, hyst.width, hyst.height);
-    */
+        printf("writing images...\n");
+
+    
+    // write original image (debug purposes) 
+    MPI_Gather(&orig.data[orig.w * orig.g], orig.d * orig.w, MPI_FLOAT, 
+        image.data, orig.d * orig.w, MPI_FLOAT, 0, MPI_COMM_WORLD);
+    if (!comm_rank)
+        write_image_template("original.pgm", image.data, image.width, image.height);
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    // write hori
+    MPI_Gather(&hori.data[hori.w * hori.g], hori.d * hori.w, MPI_FLOAT, 
+        image.data, hori.d * hori.w, MPI_FLOAT, 0, MPI_COMM_WORLD);
+    if (!comm_rank)
+        write_image_template("hori.pgm", image.data, image.width, image.height);
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    if (!comm_rank)
+        printf("image writing complete!\n");
+
     if (!comm_rank) {
         gettimeofday(&end, NULL);
 
@@ -281,8 +296,9 @@ int main(int argc, char *argv[]) {
         free(image.data);
     
     free(orig.data);
-    //free(temp.data);
-    //free(hori.data);
+    free(temp.data);
+    free(hori.data);
+    //free(vert.data);
     //free(magnitude.data);
     //free(direction.data);
     //free(hyst.data);
@@ -353,21 +369,22 @@ void gaussian_deriv(kern_s *kern, float sigma, float a) {
     }
 }
 
-void h_conv(img_s *in_img, img_s *out_img, const kern_s *kern) {
-    size_t bounds = in_img->width * in_img->height;
-    int i_off = 0; // private when ||ized
-    for (size_t i = 0; i < bounds; i++) {
+void h_conv(const chunk_s *in_img, chunk_s *out_img, const kern_s *kern) {
+    int bounds = in_img->w * (in_img->d + in_img->g);
+    int i = 0; // private when ||ized
+    int offset = 0;
+    for (int base = (in_img->g*in_img->w); base < bounds; base++) {
         float sum = 0;
-        for( size_t k = 0; k < kern->w; k++) {
-            int offset = k - floor(kern->w / 2);
-            i_off = i + offset;
-            if (i_off / in_img->width == i / in_img->width) { // same row
-                if (i_off < bounds && i_off >= 0) {
-                    sum += in_img->data[i_off] * kern->data[k];
+        for (int k = 0; k < kern->w; k++) {
+            offset = k - floor(kern->w / 2);
+            i = base + offset;
+            if (i / in_img->w == base / in_img->w) { // same row
+                if (i < bounds && i >= 0) {
+                    sum += in_img->data[i] * kern->data[k];
                 }
             }
         }
-        out_img->data[i] = sum;
+        out_img->data[base] = sum;
     }
 }
 
