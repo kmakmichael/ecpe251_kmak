@@ -46,7 +46,7 @@ void kerninit(kern_s *kern);
 void img_prep(const img_s *orig, img_s *cpy);
 void chunk_prep(const chunk_s *base, chunk_s *cpy);
 void h_conv(const chunk_s *in_img, chunk_s *out_img, const kern_s *kern);
-void v_conv(img_s *in_img, img_s *out_img, const kern_s *kern);
+void v_conv(const chunk_s *in_img, chunk_s *out_img, const kern_s *kern);
 void suppression(img_s *direction, img_s *magnitude, img_s *out_img);
 void hysteresis(img_s *img, float t_high, float t_low);
 void edge_linking(img_s *hyst, img_s *edges);
@@ -126,7 +126,7 @@ int main(int argc, char *argv[]) {
     // prep all chunks
     chunk_prep(&orig, &temp);
     chunk_prep(&orig, &hori);
-    //chunk_prep(&orig, &vert);
+    chunk_prep(&orig, &vert);
     //chunk_prep(&orig, &direction);
     //chunk_prep(&orig, &magnitude);
     //chunk_prep(&orig, &supp);
@@ -189,17 +189,19 @@ int main(int argc, char *argv[]) {
     h_conv(&orig, &temp, &h_kern);
     ghost_exchange(&temp);
     h_conv(&temp, &hori, &h_deriv);
-    ghost_exchange(&hori);
 
-    /*//vertical
-    v_conv(&image, &temp, &v_kern);
+    //vertical
+    v_conv(&orig, &temp, &v_kern);
+    ghost_exchange(&temp);
     v_conv(&temp, &vert, &v_deriv);
-    */
+    
     if (!comm_rank) {
         gettimeofday(&conv, NULL);
     }
 
     /*// direction and magnitude
+    ghost_exchange(&vert);
+    ghost_exchange(&hori);
     for(size_t i = 0; i < image.height * image.width; i++) {
         magnitude.data[i] = sqrt((hori.data[i] * hori.data[i]) + (vert.data[i] * vert.data[i]));
     }
@@ -261,6 +263,13 @@ int main(int argc, char *argv[]) {
         image.data, hori.d * hori.w, MPI_FLOAT, 0, MPI_COMM_WORLD);
     if (!comm_rank)
         write_image_template("hori.pgm", image.data, image.width, image.height);
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    // write vert
+    MPI_Gather(&vert.data[vert.w * vert.g], vert.d * vert.w, MPI_FLOAT, 
+        image.data, vert.d * vert.w, MPI_FLOAT, 0, MPI_COMM_WORLD);
+    if (!comm_rank)
+        write_image_template("vert.pgm", image.data, image.width, image.height);
     MPI_Barrier(MPI_COMM_WORLD);
 
     if (!comm_rank)
@@ -379,9 +388,7 @@ void h_conv(const chunk_s *in_img, chunk_s *out_img, const kern_s *kern) {
             offset = k - floor(kern->w / 2);
             i = base + offset;
             if (i / in_img->w == base / in_img->w) { // same row
-                if (i < bounds && i >= 0) {
-                    sum += in_img->data[i] * kern->data[k];
-                }
+                sum += in_img->data[i] * kern->data[k];
             }
         }
         out_img->data[base] = sum;
@@ -389,19 +396,18 @@ void h_conv(const chunk_s *in_img, chunk_s *out_img, const kern_s *kern) {
 }
 
 
-void v_conv(img_s *in_img, img_s *out_img, const kern_s *kern) {
-    size_t bounds = in_img->width * in_img->height;
-    int i_off = 0; // private when ||ized
-    for (size_t i = 0; i < bounds; i++) {
+void v_conv(const chunk_s *in_img, chunk_s *out_img, const kern_s *kern) {
+    size_t bounds = in_img->w * (in_img->d + in_img->g);
+    int i = 0; // private when ||ized
+    int offset = 0;
+    for (int base = (in_img->g*in_img->w); base < bounds; base++) {
         float sum = 0;
-        for( size_t k = 0; k < kern->w; k++) {
-            int offset = (k - floor(kern->w / 2)) * in_img->width;
-            i_off = i + offset;
-            if (i_off < bounds && i_off >= 0) {
-                sum += in_img->data[i_off] * kern->data[k];
-            }
+        for(int k = 0; k < kern->w; k++) {
+            offset = (k - floor(kern->w / 2)) * in_img->w;
+            i = base + offset;
+            sum += in_img->data[i] * kern->data[k];
         }
-        out_img->data[i] = sum;
+        out_img->data[base] = sum;
     }
 }
 
