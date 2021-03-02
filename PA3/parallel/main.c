@@ -193,6 +193,10 @@ int main(int argc, char *argv[]) {
     MPI_Gather(&supp.data[supp.w * supp.g], supp.d * supp.w, MPI_FLOAT, 
         image.data, supp.d * supp.w, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
+    if (!comm_rank) {
+        gettimeofday(&sort, NULL);
+    }
+
     float t_high;
     if (!comm_rank) {
         mergeSort(image.data, image.width * image.height, threadcount);
@@ -200,11 +204,7 @@ int main(int argc, char *argv[]) {
     }
 
     MPI_Bcast(&t_high, 1, MPI_INT, 0, MPI_COMM_WORLD);
-
-    if (!comm_rank) {
-        gettimeofday(&sort, NULL);
-    }
-    
+ 
     ghost_exchange(&supp);
     memcpy(temp.data, supp.data, sizeof(float) * (supp.d + 2*supp.g) * supp.w);
     ghost_exchange(&temp); 
