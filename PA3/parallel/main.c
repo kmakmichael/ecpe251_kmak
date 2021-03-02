@@ -171,10 +171,10 @@ int main(int argc, char *argv[]) {
     // direction and magnitude
     ghost_exchange(&vert);
     ghost_exchange(&hori);
-    for (size_t i = magnitude.g * magnitude.w; i < (magnitude.g + magnitude.d) * magnitude.w; i++) {
+    for (int i = magnitude.g * magnitude.w; i < (magnitude.g + magnitude.d) * magnitude.w; i++) {
         magnitude.data[i] = sqrt((hori.data[i] * hori.data[i]) + (vert.data[i] * vert.data[i]));
     }
-    for (size_t i = direction.g * direction.w; i < (direction.g + direction.d) * direction.w; i++) {
+    for (int i = direction.g * direction.w; i < (direction.g + direction.d) * direction.w; i++) {
         direction.data[i] = atan2(hori.data[i], vert.data[i]);
     }
 
@@ -182,17 +182,22 @@ int main(int argc, char *argv[]) {
         gettimeofday(&mag, NULL);
     }
 
+    ghost_exchange(&magnitude);
+    ghost_exchange(&direction);
     suppression(&direction, &magnitude, &supp);
 
     if (!comm_rank) {
         gettimeofday(&sup, NULL);
     }
+    
+    MPI_Gather(&supp.data[supp.w * supp.g], supp.d * supp.w, MPI_FLOAT, 
+        image.data, supp.d * supp.w, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
-    /*memcpy(temp.data, supp.data, sizeof(float) * supp.height * supp.width);
-    mergeSort(temp.data, temp.width * temp.height, numthreads);
+    if (!comm_rank)
+        mergeSort(image.data, image.width * image.height, threadcount);
 
-    float t_high = temp.data[(size_t) (temp.height * temp.width * 0.9)];
-    float t_low = t_high / 5.0;*/
+    float t_high = image.data[(size_t) (image.height * image.width * 0.9)];
+    float t_low = t_high / 5.0;
 
     if (!comm_rank) {
         gettimeofday(&sort, NULL);
