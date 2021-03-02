@@ -51,7 +51,7 @@ void suppression(img_s *direction, img_s *magnitude, img_s *out_img);
 void hysteresis(img_s *img, float t_high, float t_low);
 void edge_linking(img_s *hyst, img_s *edges);
 float timecalc(struct timeval start, struct timeval end);
-void scatterv(int comm_size, int comm_rank, int g, img_s *send, img_s *recv);
+void gather_and_save(const img_s *image, const chunk_s *chunk, char *filename);
 void ghost_exchange(chunk_s *chunk);
 
 int main(int argc, char *argv[]) {
@@ -133,41 +133,10 @@ int main(int argc, char *argv[]) {
     //chunk_prep(&orig, &hyst);
  
     rc = MPI_Barrier(MPI_COMM_WORLD);
-    //scatterv(comm_size, comm_rank, floor(a/2.0), &image, &orig);
     MPI_Scatter(image.data, image.width * orig.d, MPI_FLOAT, 
         &orig.data[orig.w * orig.g], orig.w * orig.d, MPI_FLOAT, 0, MPI_COMM_WORLD);
     ghost_exchange(&orig);
  
-    /*
-    // fill the ghost rows with arbitrary data for testing
-    for (int i = 0; i < orig.w * orig.g; i++) {
-        orig.data[i] = 0;
-        orig.data[i + (orig.g + orig.d) * orig.w] = 255;
-    }
-    
-    // debug: write the ghost rows
-    //  these should be black on top, white/gray on bottom
-    char name[1000];
-    sprintf(name, "chunk_pre_%d.pgm", comm_rank);
-    write_image_template<float>(name, &orig.data[orig.g * orig.w], orig.w, orig.d);
-    sprintf(name, "top_ghost_pre_%d.pgm", comm_rank);
-    write_image_template<float>(name, orig.data, orig.w, orig.g);
-    sprintf(name, "btm_ghost_pre_%d.pgm", comm_rank);
-    write_image_template<float>(name, &orig.data[(orig.d + orig.g) * orig.w], orig.w, orig.g);
-    
-    // exchange ghost rows
-    ghost_exchange(&orig); 
-    
-    // debug: write the ghost rows
-    //  these should contain the actual image data
-    sprintf(name, "chunk_post_%d.pgm", comm_rank);
-    write_image_template<float>(name, &orig.data[orig.g * orig.w], orig.w, orig.d);
-    sprintf(name, "top_ghost_post_%d.pgm", comm_rank);
-    write_image_template<float>(name, orig.data, orig.w, orig.g);
-    sprintf(name, "btm_ghost_post_%d.pgm", comm_rank);
-    write_image_template<float>(name, &orig.data[(orig.d + orig.g) * orig.w], orig.w, orig.g);
-    */
-
     h_kern.w = 2 * a + 1;
     h_kern.data = (float*) calloc(h_kern.w, sizeof(float));
     h_deriv.w = 2 * a + 1;
@@ -246,34 +215,10 @@ int main(int argc, char *argv[]) {
         // stop time
         gettimeofday(&compend, NULL);
     }
-
-    if (!comm_rank)
-        printf("writing images...\n");
-
-    
-    // write original image (debug purposes) 
-    MPI_Gather(&orig.data[orig.w * orig.g], orig.d * orig.w, MPI_FLOAT, 
-        image.data, orig.d * orig.w, MPI_FLOAT, 0, MPI_COMM_WORLD);
-    if (!comm_rank)
-        write_image_template("original.pgm", image.data, image.width, image.height);
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    // write hori
-    MPI_Gather(&hori.data[hori.w * hori.g], hori.d * hori.w, MPI_FLOAT, 
-        image.data, hori.d * hori.w, MPI_FLOAT, 0, MPI_COMM_WORLD);
-    if (!comm_rank)
-        write_image_template("hori.pgm", image.data, image.width, image.height);
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    // write vert
-    MPI_Gather(&vert.data[vert.w * vert.g], vert.d * vert.w, MPI_FLOAT, 
-        image.data, vert.d * vert.w, MPI_FLOAT, 0, MPI_COMM_WORLD);
-    if (!comm_rank)
-        write_image_template("vert.pgm", image.data, image.width, image.height);
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    if (!comm_rank)
-        printf("image writing complete!\n");
+   
+    gather_and_save(&image, &orig, "original.pgm");
+    gather_and_save(&image, &hori, "horizontal.pgm");
+    gather_and_save(&image, &vert, "vertical.pgm");
 
     if (!comm_rank) {
         gettimeofday(&end, NULL);
@@ -563,6 +508,17 @@ float timecalc(struct timeval start, struct timeval end) {
 }
 
 
+void gather_and_save(const img_s *image, const chunk_s *chunk, char *filename) {
+    int comm_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+
+    MPI_Gather(&chunk->data[chunk->w * chunk->g], chunk->d * chunk->w, MPI_FLOAT, 
+        image->data, chunk->d * chunk->w, MPI_FLOAT, 0, MPI_COMM_WORLD);
+    if (!comm_rank)
+        write_image_template(filename, image->data, image->width, image->height);
+}
+
+
 void ghost_exchange(chunk_s *chunk) {
     MPI_Status status;
     
@@ -586,29 +542,3 @@ void ghost_exchange(chunk_s *chunk) {
         MPI_Recv(&chunk->data[(chunk->g + chunk->d) * chunk->w], chunk->w * chunk->g, MPI_FLOAT, rank + 1, 1, MPI_COMM_WORLD, &status);
     }
 }
-
-
-
-/* Deprecated
-void scatterv(int comm_size, int comm_rank, int g, img_s *send, img_s *recv) {
-    //scatterv params
-    int *sendcounts,*displs;
-    if(!comm_rank) {
-        sendcounts = (int *)calloc(comm_size, sizeof(int));
-        displs = (int *)calloc(comm_size, sizeof(int));
-        displs[0] = 0;
-        sendcounts[0] = ((send->height/comm_size)+g)*send->width;
-        for(int i=1;i<comm_size-1;i++) {
-            displs[i] = ((send->height/comm_size)*i-g)*send->width;
-            sendcounts[i] = ((send->height/comm_size)+2*g)*send->width;
-        }
-        displs[comm_size-1] = ((send->height/comm_size)*(comm_size-1)-g)*send->width;
-        sendcounts[comm_size-1] = ((send->height/comm_size)+g)*send->width;
-    }
-    if(comm_rank==0)
-        MPI_Scatterv(send->data,sendcounts,displs,MPI_FLOAT,recv->data,(send->height/comm_size+g)*send->width,MPI_FLOAT,0,MPI_COMM_WORLD);
-    else if (comm_rank==comm_size-1)
-        MPI_Scatterv(send->data,sendcounts,displs,MPI_FLOAT,recv->data,(send->height/comm_size+g)*send->width,MPI_FLOAT,0,MPI_COMM_WORLD);
-    else
-	    MPI_Scatterv(send->data,sendcounts,displs,MPI_FLOAT,recv->data,(send->height/comm_size+2*g)*send->width,MPI_FLOAT,0,MPI_COMM_WORLD);
-} */
