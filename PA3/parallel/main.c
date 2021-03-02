@@ -28,10 +28,8 @@ typedef struct {
 } img_s;
 
 typedef struct {
-    float *top_ghost;
     float *data;
-    float *btm_ghost;
-    int width;
+    int w;
     int g; // length of ghost rows
     int d; // length of data
 } chunk_s;
@@ -119,60 +117,55 @@ int main(int argc, char *argv[]) {
     MPI_Bcast(&image.height, 1, MPI_INT, 0, MPI_COMM_WORLD);
    
     // calc chunk size
-    orig.width = image.width;
+    orig.w = image.width;
     orig.d = image.height / comm_size;
     orig.g = ceil(a/2.0);
-    orig.data = (float *) calloc(orig.d * orig.width, sizeof(float));
-    orig.top_ghost = (float *) calloc(orig.g * orig.width, sizeof(float));
-    orig.btm_ghost = (float *) calloc(orig.g * orig.width, sizeof(float));    
     
-    printf("chunk data for rank %d: d:%d, g:%d, w:%d\n", comm_rank, orig.d, orig.g, orig.width);
+    orig.data = (float *) calloc((orig.d + 2*orig.g) * orig.w, sizeof(float));
+ 
+    printf("chunk data for rank %d: d:%d, g:%d, w:%d\n", comm_rank, orig.d, orig.g, orig.w);
 
     // prep all chunks
-    chunk_prep(&orig, &hori);
-    chunk_prep(&orig, &vert);
-    chunk_prep(&orig, &direction);
-    chunk_prep(&orig, &magnitude);
-    chunk_prep(&orig, &supp);
-    chunk_prep(&orig, &hyst);
+    chunk_prep(&orig, &temp);
+    //chunk_prep(&orig, &hori);
+    //chunk_prep(&orig, &vert);
+    //chunk_prep(&orig, &direction);
+    //chunk_prep(&orig, &magnitude);
+    //chunk_prep(&orig, &supp);
+    //chunk_prep(&orig, &hyst);
  
-    printf("rank %d allocated for chunks\n", comm_rank);
-
     rc = MPI_Barrier(MPI_COMM_WORLD);
-    if (!comm_rank)
-        printf("begin scatterv\n");
     //scatterv(comm_size, comm_rank, floor(a/2.0), &image, &orig);
     MPI_Scatter(image.data, image.width * orig.d, MPI_FLOAT, 
-                orig.data, orig.width * orig.d, MPI_FLOAT, 0, MPI_COMM_WORLD);
-
+        &orig.data[orig.w * orig.g], orig.w * orig.d, MPI_FLOAT, 0, MPI_COMM_WORLD);
+    
     // fill the ghost rows with arbitrary data for testing
-    for (int i = 0; i < orig.width * orig.g; i++) {
-        orig.top_ghost[i] = 0;
-        orig.btm_ghost[i] = 255;
+    for (int i = 0; i < orig.w * orig.g; i++) {
+        orig.data[i] = 0;
+        orig.data[i + (orig.g + orig.d) * orig.w] = 255;
     }
-
+    
     // debug: write the ghost rows
     //  these should be black on top, white/gray on bottom
     char name[1000];
     sprintf(name, "chunk_pre_%d.pgm", comm_rank);
-    write_image_template<float>(name, orig.data, orig.width, orig.d);
+    write_image_template<float>(name, &orig.data[orig.g * orig.w], orig.w, orig.d);
     sprintf(name, "top_ghost_pre_%d.pgm", comm_rank);
-    write_image_template<float>(name, orig.top_ghost, orig.width, orig.g);
+    write_image_template<float>(name, orig.data, orig.w, orig.g);
     sprintf(name, "btm_ghost_pre_%d.pgm", comm_rank);
-    write_image_template<float>(name, orig.btm_ghost, orig.width, orig.g);
-
+    write_image_template<float>(name, &orig.data[(orig.d + orig.g) * orig.w], orig.w, orig.g);
+    
     // exchange ghost rows
     ghost_exchange(&orig); 
     
     // debug: write the ghost rows
     //  these should contain the actual image data
     sprintf(name, "chunk_post_%d.pgm", comm_rank);
-    write_image_template<float>(name, orig.data, orig.width, orig.d);
+    write_image_template<float>(name, &orig.data[orig.g * orig.w], orig.w, orig.d);
     sprintf(name, "top_ghost_post_%d.pgm", comm_rank);
-    write_image_template<float>(name, orig.top_ghost, orig.width, orig.g);
+    write_image_template<float>(name, orig.data, orig.w, orig.g);
     sprintf(name, "btm_ghost_post_%d.pgm", comm_rank);
-    write_image_template<float>(name, orig.btm_ghost, orig.width, orig.g);
-
+    write_image_template<float>(name, &orig.data[(orig.d + orig.g) * orig.w], orig.w, orig.g);
     /*
     h_kern.w = 2 * a + 1;
     h_kern.data = (float*) calloc(h_kern.w, sizeof(float));
@@ -249,7 +242,7 @@ int main(int argc, char *argv[]) {
         gettimeofday(&compend, NULL);
     }
 
-    /*
+    /* must change!
     MPI_Gather(&direction.data, direction.g * direction.width, MPI_FLOAT, 
         &image.data, image.width * image.height, MPI_FLOAT, 0, MPI_COMM_WORLD);
     if (!comm_rank)
@@ -288,12 +281,12 @@ int main(int argc, char *argv[]) {
         free(image.data);
     
     free(orig.data);
-    free(temp.data);
-    free(hori.data);
-    free(magnitude.data);
-    free(direction.data);
-    free(hyst.data);
-    free(supp.data);
+    //free(temp.data);
+    //free(hori.data);
+    //free(magnitude.data);
+    //free(direction.data);
+    //free(hyst.data);
+    //free(supp.data);
     //free(h_kern.data);
     //free(v_kern.data);
     //free(h_deriv.data);
@@ -312,12 +305,10 @@ void img_prep(const img_s *orig, img_s *cpy) {
 
 
 void chunk_prep(const chunk_s *orig, chunk_s *cpy) {
-    cpy->width = orig->width;
+    cpy->w = orig->w;
     cpy->d = orig->d;
     cpy->g = orig->g;
-    cpy->data = (float *) calloc(cpy->width * cpy->d, sizeof(float));
-    cpy->top_ghost = (float *) calloc(cpy->width * cpy->g, sizeof(float));
-    cpy->btm_ghost = (float *) calloc(cpy->width * cpy->g, sizeof(float));
+    cpy->data = (float *) calloc((orig->d + 2*orig->g) * orig->w, sizeof(float));
 }
 
 
@@ -558,21 +549,24 @@ void ghost_exchange(chunk_s *chunk) {
     
     // send bottom downwards
     if (rank != size - 1) {
-        MPI_Send(&chunk->data[chunk->width * (chunk->d - chunk->g)], chunk->width * chunk->g, MPI_FLOAT, rank + 1, 0, MPI_COMM_WORLD);
+        MPI_Send(&chunk->data[chunk->w * chunk->d], chunk->w * chunk->g, MPI_FLOAT, rank + 1, 0, MPI_COMM_WORLD);
     }
     if (rank) {
-        MPI_Recv(chunk->top_ghost, chunk->width * chunk->g, MPI_FLOAT, rank - 1, 0, MPI_COMM_WORLD, &status);
+        MPI_Recv(&chunk->data[chunk->w * chunk->g], chunk->w * chunk->g, MPI_FLOAT, rank - 1, 0, MPI_COMM_WORLD, &status);
     }
 
     // send top upwards
     if (rank) {
-        MPI_Send(chunk->data, chunk->width * chunk->g, MPI_FLOAT, rank - 1, 1, MPI_COMM_WORLD);
+        MPI_Send(&chunk->data[chunk->w * chunk->g], chunk->w * chunk->g, MPI_FLOAT, rank - 1, 1, MPI_COMM_WORLD);
     }    
     if (rank != size - 1) {
-        MPI_Recv(chunk->btm_ghost, chunk->width * chunk->g, MPI_FLOAT, rank + 1, 1, MPI_COMM_WORLD, &status);
+        MPI_Recv(&chunk->data[chunk->w * chunk->g], chunk->w * chunk->g, MPI_FLOAT, rank + 1, 1, MPI_COMM_WORLD, &status);
     }
 }
 
+
+
+/* Deprecated
 void scatterv(int comm_size, int comm_rank, int g, img_s *send, img_s *recv) {
     //scatterv params
     int *sendcounts,*displs;
@@ -594,4 +588,4 @@ void scatterv(int comm_size, int comm_rank, int g, img_s *send, img_s *recv) {
         MPI_Scatterv(send->data,sendcounts,displs,MPI_FLOAT,recv->data,(send->height/comm_size+g)*send->width,MPI_FLOAT,0,MPI_COMM_WORLD);
     else
 	    MPI_Scatterv(send->data,sendcounts,displs,MPI_FLOAT,recv->data,(send->height/comm_size+2*g)*send->width,MPI_FLOAT,0,MPI_COMM_WORLD);
-}
+} */
