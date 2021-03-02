@@ -18,7 +18,7 @@ usage: ./canny <image path> <sigma> <num threads>
 #include "sort.h"
 #include "image_template.h"
 
-#define timing_mode 1
+#define timing_mode 0
 
 // structs
 typedef struct {
@@ -187,20 +187,33 @@ int main(int argc, char *argv[]) {
     if (!comm_rank)
         gettimeofday(&sup, NULL);
     
-    MPI_Gather(&supp.data[supp.w * supp.g], supp.d * supp.w, MPI_FLOAT, 
-        image.data, supp.d * supp.w, MPI_FLOAT, 0, MPI_COMM_WORLD);
-
+    // image is already divided, so merge sort each chunk
+    // MPI comms are the slowest operation, this avoids any gathering
+    memcpy(&temp.data[temp.g * temp.w], &supp.data[supp.g * supp.w], sizeof(float) * supp.d * supp.w);
+    mergeSort(&temp.data[temp.g * temp.w], temp.w * (temp.g + temp.d), threadcount);
+   
+    // then merge those chunks
+    for (int n = 2; n <= comm_size; n *= 2) {
+        printf("rank %d % 2 = %d\n", comm_rank, comm_rank % n);
+        if (comm_rank % n) {
+            printf("round %d: rank %d sending to %d\n", n, comm_rank, comm_rank - (n/2));
+            break;
+        } else {
+            printf("round %d: rank %d receiving from %d\n", n, comm_rank, comm_rank + (n/2));
+        }
+    } 
+    printf("rank %d merged!\n", comm_rank);
+    
     float t_high;
     if (!comm_rank) {
-        mergeSort(image.data, image.width * image.height, threadcount);
         t_high = image.data[(size_t) (image.height * image.width * 0.9)];
     }
+ 
+    MPI_Bcast(&t_high, 1, MPI_FLOAT, 0, MPI_COMM_WORLD);
  
     if (!comm_rank)
         gettimeofday(&sort, NULL);
 
-    MPI_Bcast(&t_high, 1, MPI_INT, 0, MPI_COMM_WORLD);
- 
     ghost_exchange(&supp);
     memcpy(temp.data, supp.data, sizeof(float) * (supp.d + 2*supp.g) * supp.w);
     //ghost_exchange(&temp); 
