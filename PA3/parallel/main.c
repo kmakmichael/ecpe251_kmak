@@ -47,7 +47,7 @@ void img_prep(const img_s *orig, img_s *cpy);
 void chunk_prep(const chunk_s *base, chunk_s *cpy);
 void h_conv(const chunk_s *in_img, chunk_s *out_img, const kern_s *kern);
 void v_conv(const chunk_s *in_img, chunk_s *out_img, const kern_s *kern);
-void suppression(img_s *direction, img_s *magnitude, img_s *out_img);
+void suppression(const chunk_s *direction, const chunk_s *magnitude, chunk_s *out_img);
 void hysteresis(img_s *img, float t_high, float t_low);
 void edge_linking(img_s *hyst, img_s *edges);
 float timecalc(struct timeval start, struct timeval end);
@@ -129,7 +129,7 @@ int main(int argc, char *argv[]) {
     chunk_prep(&orig, &vert);
     chunk_prep(&orig, &direction);
     chunk_prep(&orig, &magnitude);
-    //chunk_prep(&orig, &supp);
+    chunk_prep(&orig, &supp);
     //chunk_prep(&orig, &hyst);
  
     rc = MPI_Barrier(MPI_COMM_WORLD);
@@ -182,7 +182,7 @@ int main(int argc, char *argv[]) {
         gettimeofday(&mag, NULL);
     }
 
-    //suppression(&direction, &magnitude, &supp);
+    suppression(&direction, &magnitude, &supp);
 
     if (!comm_rank) {
         gettimeofday(&sup, NULL);
@@ -221,6 +221,7 @@ int main(int argc, char *argv[]) {
     gather_and_save(&image, &vert, "vertical.pgm");
     gather_and_save(&image, &direction, "direction.pgm");
     gather_and_save(&image, &magnitude, "magnitude.pgm");
+    gather_and_save(&image, &supp, "suppression.pgm");
 
     if (!comm_rank) {
         gettimeofday(&end, NULL);
@@ -257,8 +258,8 @@ int main(int argc, char *argv[]) {
     free(vert.data);
     free(magnitude.data);
     free(direction.data);
+    free(supp.data);
     //free(hyst.data);
-    //free(supp.data);
     free(h_kern.data);
     free(v_kern.data);
     free(h_deriv.data);
@@ -358,42 +359,39 @@ void v_conv(const chunk_s *in_img, chunk_s *out_img, const kern_s *kern) {
     }
 }
 
-void suppression(img_s *direction, img_s *magnitude, img_s *supp) {
+void suppression(const chunk_s *direction, const chunk_s *magnitude, chunk_s *supp) {
     #define Gxy magnitude->data
-    size_t bounds = direction->width * direction->height;
-    size_t width = magnitude->width;
+    size_t bounds = (direction->g + direction->d) * direction->w;
+    size_t width = magnitude->w;
     size_t btm_right = width + 1;
     size_t btm_left = width - 1;
     float theta; // private when ||ized
-    for (size_t i = 0; i < bounds; i++) {
+    for (size_t i = direction->g * direction->w; i < bounds; i++) {
         theta = direction->data[i];
         if (theta < 0) {
             theta += M_PI;
         }
         theta *= (180.0 / M_PI);
         supp->data[i] = Gxy[i];
+        // because of ghost rows, top and bottom checks can be removed
         if (theta <= 22.5 || theta > 157.5) {
             // top
-            if (i >= width) {
-                if (Gxy[i] < Gxy[i - width]) {
-                    supp->data[i] = 0;
-                }
+            if (Gxy[i] < Gxy[i - width]) {
+                supp->data[i] = 0;
             }
             // bottom
-            if (i < bounds - width) {
-                if (Gxy[i] < Gxy[i + width]) {
-                    supp->data[i] = 0;
-                }
+            if (Gxy[i] < Gxy[i + width]) {
+                supp->data[i] = 0;
             }
         } else if (theta > 22.5 && theta <= 67.5) {
             //topleft
-            if (i >= width && i % width > 0) {
+            if (i % width > 0) {
                 if (Gxy[i] < Gxy[i - btm_right]) {
                     supp->data[i] = 0;
                 }
             }
             // bottomright
-            if (i < bounds - width && i % width < width-1) {
+            if (i % width < width-1) {
                 if (Gxy[i] < Gxy[i + btm_right]) {
                     supp->data[i] = 0;
                 }
@@ -413,13 +411,13 @@ void suppression(img_s *direction, img_s *magnitude, img_s *supp) {
             }
         } else if (theta > 112.5 && theta <= 157.5) {
             // topright
-            if (i >= width && i % width < width-1) {
+            if (i % width < width-1) {
                 if (Gxy[i] < Gxy[i - btm_left]) {
                     supp->data[i] = 0;
                 }
             }
             // bottomleft
-            if (i < bounds - width && i % width > 0) {
+            if (i % width > 0) {
                 if (Gxy[i] < Gxy[i + btm_left]) {
                     supp->data[i] = 0;
                 }
