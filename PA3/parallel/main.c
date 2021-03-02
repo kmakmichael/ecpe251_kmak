@@ -127,8 +127,8 @@ int main(int argc, char *argv[]) {
     chunk_prep(&orig, &temp);
     chunk_prep(&orig, &hori);
     chunk_prep(&orig, &vert);
-    //chunk_prep(&orig, &direction);
-    //chunk_prep(&orig, &magnitude);
+    chunk_prep(&orig, &direction);
+    chunk_prep(&orig, &magnitude);
     //chunk_prep(&orig, &supp);
     //chunk_prep(&orig, &hyst);
  
@@ -168,15 +168,15 @@ int main(int argc, char *argv[]) {
         gettimeofday(&conv, NULL);
     }
 
-    /*// direction and magnitude
+    // direction and magnitude
     ghost_exchange(&vert);
     ghost_exchange(&hori);
-    for(size_t i = 0; i < image.height * image.width; i++) {
+    for (size_t i = magnitude.g * magnitude.w; i < (magnitude.g + magnitude.d) * magnitude.w; i++) {
         magnitude.data[i] = sqrt((hori.data[i] * hori.data[i]) + (vert.data[i] * vert.data[i]));
     }
-    for(size_t i = 0; i < image.height * image.width; i++) {
+    for (size_t i = direction.g * direction.w; i < (direction.g + direction.d) * direction.w; i++) {
         direction.data[i] = atan2(hori.data[i], vert.data[i]);
-    }*/
+    }
 
     if (!comm_rank) {
         gettimeofday(&mag, NULL);
@@ -219,6 +219,8 @@ int main(int argc, char *argv[]) {
     gather_and_save(&image, &orig, "original.pgm");
     gather_and_save(&image, &hori, "horizontal.pgm");
     gather_and_save(&image, &vert, "vertical.pgm");
+    gather_and_save(&image, &direction, "direction.pgm");
+    gather_and_save(&image, &magnitude, "magnitude.pgm");
 
     if (!comm_rank) {
         gettimeofday(&end, NULL);
@@ -252,15 +254,15 @@ int main(int argc, char *argv[]) {
     free(orig.data);
     free(temp.data);
     free(hori.data);
-    //free(vert.data);
-    //free(magnitude.data);
-    //free(direction.data);
+    free(vert.data);
+    free(magnitude.data);
+    free(direction.data);
     //free(hyst.data);
     //free(supp.data);
-    //free(h_kern.data);
-    //free(v_kern.data);
-    //free(h_deriv.data);
-    //free(v_deriv.data);
+    free(h_kern.data);
+    free(v_kern.data);
+    free(h_deriv.data);
+    free(v_deriv.data);
 
     MPI_Finalize();
 
