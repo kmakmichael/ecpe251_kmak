@@ -212,21 +212,19 @@ int main(int argc, char *argv[]) {
     // then merge those chunks
     // L won't be used in the ranks with merge_rounds=1, but ceil is there to keep calloc from complaining 
     //float *L  = (float *) calloc(ceil(merge_rounds/2) * orig.d * orig.w, sizeof(float)); 
-    for (int n = 1; n < comm_size; n *= 2) {
-        if (comm_rank % (2 *n)) {
-            //MPI_Send(
-            printf("round %d: rank %d sending to %d\n", n, comm_rank, comm_rank - n);
-            break;
-        } else {
-            printf("round %d: rank %d receiving from %d\n", n, comm_rank, comm_rank + n);
-        }
+   
+    float t_high; 
+    int n;
+    for (n = 1; n < merge_rounds; n *= 2) {
+        //MPI_Send(
+        printf("round %d: rank %d merging with %d\n", n, comm_rank, comm_rank + n);
     }
-    
-    float t_high;
-    if (!comm_rank) {
+    if (comm_rank) {
+        printf("rank %d sending to  %d\n", comm_rank, comm_rank - n);
+    } else {
         t_high = image.data[(size_t) (image.height * image.width * 0.9)];
-    }
- 
+    }      
+    
     MPI_Bcast(&t_high, 1, MPI_FLOAT, 0, MPI_COMM_WORLD);
  
     if (!comm_rank)
