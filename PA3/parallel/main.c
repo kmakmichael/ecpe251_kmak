@@ -390,7 +390,7 @@ void gaussian_deriv(kern_s *kern, float sigma, float a) {
 
 void h_conv(const chunk_s *in_img, chunk_s *out_img, const kern_s *kern) {
     int bounds = in_img->w * (in_img->d + in_img->g);
-    int i = 0; // private when ||ized
+    int i = 0;
     int offset = 0;
     #pragma omp parallel for private(i, offset)
     for (int base = (in_img->g*in_img->w); base < bounds; base++) {
@@ -409,7 +409,7 @@ void h_conv(const chunk_s *in_img, chunk_s *out_img, const kern_s *kern) {
 
 void v_conv(const chunk_s *in_img, chunk_s *out_img, const kern_s *kern) {
     size_t bounds = in_img->w * (in_img->d + in_img->g);
-    int i = 0; // private when ||ized
+    int i = 0;
     int offset = 0;
     #pragma omp parallel for private(i, offset)
     for (int base = (in_img->g*in_img->w); base < bounds; base++) {
@@ -429,7 +429,8 @@ void suppression(const chunk_s *direction, const chunk_s *magnitude, chunk_s *su
     size_t width = magnitude->w;
     size_t btm_right = width + 1;
     size_t btm_left = width - 1;
-    float theta; // private when ||ized
+    float theta;
+    #pragma omp parallel for private(theta)
     for (size_t i = direction->g * direction->w; i < bounds; i++) {
         theta = direction->data[i];
         if (theta < 0) {
