@@ -130,10 +130,10 @@ int main(int argc, char *argv[]) {
     // calc chunk size
     orig.w = image.width;
     orig.d = image.height / comm_size;
-    orig.g = ceil(a/2.0);
+    orig.g = a;
     
     orig.data = (float *) calloc((orig.d + 2*orig.g) * orig.w, sizeof(float));
- 
+
     // prep all chunks
     chunk_prep(&orig, &temp);
     chunk_prep(&orig, &hori);
@@ -226,7 +226,6 @@ int main(int argc, char *argv[]) {
                 i++;
             } else {
                 image.data[k] = R[j];
-                //MPI_Recv(&R, 1, MPI_FLOAT, comm_rank + n, n, MPI_COMM_WORLD, &st);
                 j++;
             }
             k++;
@@ -238,7 +237,6 @@ int main(int argc, char *argv[]) {
         }
         while (j < datasize) {
             image.data[k] = R[j];
-            //MPI_Recv(&R, 1, MPI_FLOAT, comm_rank + n, n, MPI_COMM_WORLD, &st);
             j++;
             k++;
         }
@@ -248,7 +246,6 @@ int main(int argc, char *argv[]) {
             MPI_Send(&temp.data[temp.w * temp.g], temp.w * temp.d, MPI_FLOAT, comm_rank - n, n, MPI_COMM_WORLD);
         else
             MPI_Send(image.data, n * temp.w * temp.d, MPI_FLOAT, comm_rank - n, n, MPI_COMM_WORLD);
-        //printf("rank %d sending to  %d\n", comm_rank, comm_rank - n);
     } else {
         t_high = image.data[(size_t) (image.height * image.width * 0.9)];
     }
@@ -273,17 +270,23 @@ int main(int argc, char *argv[]) {
     ghost_exchange(&temp);
     edge_linking(&temp, &hyst);
     
+    MPI_Gather(&hyst.data[hyst.w * hyst.g], hyst.d * hyst.w, MPI_FLOAT, 
+        image.data, hyst.d * hyst.w, MPI_FLOAT, 0, MPI_COMM_WORLD);
+    
     // stop time
     if (!comm_rank)
         gettimeofday(&compend, NULL);
-   
+
+    if (!comm_rank)
+        write_image_template("output.pgm", image.data, image.width, image.height);
+    
     /*gather_and_save(&image, &orig, "original.pgm");
     gather_and_save(&image, &hori, "horizontal.pgm");
     gather_and_save(&image, &vert, "vertical.pgm");
     gather_and_save(&image, &direction, "direction.pgm");
     gather_and_save(&image, &magnitude, "magnitude.pgm");
-    gather_and_save(&image, &supp, "suppression.pgm");*/
-    gather_and_save(&image, &hyst, "output.pgm");
+    gather_and_save(&image, &supp, "suppression.pgm");
+    gather_and_save(&image, &hyst, "output.pgm");*/
 
     if (!comm_rank) {
         gettimeofday(&end, NULL);
@@ -292,7 +295,7 @@ int main(int argc, char *argv[]) {
             image.height, 
             sigma, 
         threadcount, 
-            timecalc(compstart, end), 
+            timecalc(compstart, compend), 
             timecalc(start, end)
         );
 
