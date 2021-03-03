@@ -10,7 +10,7 @@ void merge(float arr[], int l, int m, int r);
 void mergeSort(float arr[], int n,int threads)
 {
 
-   //omp_set_num_threads(threads);
+   omp_set_num_threads(threads);
 
    int curr_size;  // For current size of subarrays to be merged
                    // curr_size varies from 1 to n/2
@@ -19,7 +19,7 @@ void mergeSort(float arr[], int n,int threads)
    int mid,right_end;
    for (curr_size=1; curr_size<=n-1; curr_size = 2*curr_size)
    {
-	//#pragma omp parallel for
+	#pragma omp parallel for private(mid, right_end)
 	for (left_start=0; left_start<n-1; left_start += 2*curr_size)
        {
 		 mid = min(left_start + curr_size - 1, n-1);
