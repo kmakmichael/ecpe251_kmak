@@ -195,36 +195,68 @@ int main(int argc, char *argv[]) {
     ghost_exchange(&direction);
     suppression(&direction, &magnitude, &supp);
 
-    if (!comm_rank)  {
+    if (!comm_rank)
         gettimeofday(&sup, NULL);
-    } else {
-        // allocate 2^merge_rounds chunks worth of space for the merge
-        // (merge_rounds is calculated earlier, while rank 0 is reading the image)
-        //image.data = (float *) calloc(merge_rounds * orig.d * orig.w, sizeof(float));
-    }    
-    printf("rank %d alloc'ing %d * (d*w)\n", comm_rank, merge_rounds); 
 
     // image is already divided, so merge sort each chunk
-    // MPI comms are the slowest operation, this avoids any gathering
     memcpy(&temp.data[temp.g * temp.w], &supp.data[supp.g * supp.w], sizeof(float) * supp.d * supp.w);
-    mergeSort(&temp.data[temp.g * temp.w], temp.w * (temp.g + temp.d), threadcount);
-   
-    // then merge those chunks
-    // L won't be used in the ranks with merge_rounds=1, but ceil is there to keep calloc from complaining 
-    //float *L  = (float *) calloc(ceil(merge_rounds/2) * orig.d * orig.w, sizeof(float)); 
-   
+    mergeSort(&temp.data[temp.g * temp.w], temp.w * temp.d, threadcount);
+  
+    // then merge those chunks down to root
     float t_high; 
-    int n;
+    int n; 
+    float *L = (float *) calloc(temp.d * temp.w * merge_rounds, sizeof(float));
+    float *R = (float *) calloc(temp.d * temp.w * merge_rounds, sizeof(float));
+    if (comm_rank)
+        image.data = (float *) calloc(temp.d * temp.w * merge_rounds, sizeof(float));
     for (n = 1; n < merge_rounds; n *= 2) {
-        //MPI_Send(
-        printf("round %d: rank %d merging with %d\n", n, comm_rank, comm_rank + n);
+        int datasize = temp.w * temp.d * n;
+        int i = 0;
+        int j = 0;
+        int k = 0;
+        MPI_Status st;
+        if (n == 1)
+            memcpy(L, &temp.data[temp.w * temp.g], sizeof(float) * temp.d * temp.w);
+        else
+            memcpy(L, image.data, datasize * sizeof(float));
+        MPI_Recv(R, datasize, MPI_FLOAT, comm_rank + n, n, MPI_COMM_WORLD, &st);
+        while (i < datasize && j < datasize) {
+            if (L[i] <= R[j]) {
+                image.data[k] = L[i];
+                i++;
+            } else {
+                image.data[k] = R[j];
+                //MPI_Recv(&R, 1, MPI_FLOAT, comm_rank + n, n, MPI_COMM_WORLD, &st);
+                j++;
+            }
+            k++;
+        }
+        while (i < datasize) {
+            image.data[k] = L[i];
+            i++;
+            k++;
+        }
+        while (j < datasize) {
+            image.data[k] = R[j];
+            //MPI_Recv(&R, 1, MPI_FLOAT, comm_rank + n, n, MPI_COMM_WORLD, &st);
+            j++;
+            k++;
+        }
     }
     if (comm_rank) {
-        printf("rank %d sending to  %d\n", comm_rank, comm_rank - n);
+        if (n == 1)
+            MPI_Send(&temp.data[temp.w * temp.g], temp.w * temp.d, MPI_FLOAT, comm_rank - n, n, MPI_COMM_WORLD);
+        else
+            MPI_Send(image.data, n * temp.w * temp.d, MPI_FLOAT, comm_rank - n, n, MPI_COMM_WORLD);
+        //printf("rank %d sending to  %d\n", comm_rank, comm_rank - n);
     } else {
         t_high = image.data[(size_t) (image.height * image.width * 0.9)];
-    }      
-    
+    }
+    free(L);
+    free(R);
+
+    if (!comm_rank)
+        t_high = image.data[(size_t) (image.height * image.width * 0.9)];
     MPI_Bcast(&t_high, 1, MPI_FLOAT, 0, MPI_COMM_WORLD);
  
     if (!comm_rank)
@@ -279,9 +311,7 @@ int main(int argc, char *argv[]) {
         }
     }
     
-    if (!comm_rank)
-        free(image.data);
-    
+    free(image.data);
     free(orig.data);
     free(temp.data);
     free(hori.data);
