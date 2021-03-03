@@ -82,7 +82,7 @@ int main(int argc, char *argv[]) {
 
     // argparse
     sigma = atof(argv[2]);
-    threadcount = 1; //atoi(argv[3]);
+    threadcount = atoi(argv[3]);
     
     // check args
     if (!comm_rank) {
@@ -96,15 +96,14 @@ int main(int argc, char *argv[]) {
             MPI_Abort(MPI_COMM_WORLD, MPI_ERR_ARG);
             return -1;
         } 
-        /*
-        if (numthreads > omp_get_num_procs()) {
+        if (threadcount > omp_get_num_procs()) {
             fprintf(stderr, "trying to use more threads than processors\n");
             MPI_Abort(MPI_COMM_WORLD, rc);
             return -1;
-        }*/
+        }
     }
 
-    //omp_set_num_threads(numthreads);
+    omp_set_num_threads(threadcount);
     
     if (!comm_rank) {
         read_image_template(argv[1], &image.data, &image.width, &image.height);
@@ -393,6 +392,7 @@ void h_conv(const chunk_s *in_img, chunk_s *out_img, const kern_s *kern) {
     int bounds = in_img->w * (in_img->d + in_img->g);
     int i = 0; // private when ||ized
     int offset = 0;
+    #pragma omp parallel for private(i, offset)
     for (int base = (in_img->g*in_img->w); base < bounds; base++) {
         float sum = 0;
         for (int k = 0; k < kern->w; k++) {
@@ -411,6 +411,7 @@ void v_conv(const chunk_s *in_img, chunk_s *out_img, const kern_s *kern) {
     size_t bounds = in_img->w * (in_img->d + in_img->g);
     int i = 0; // private when ||ized
     int offset = 0;
+    #pragma omp parallel for private(i, offset)
     for (int base = (in_img->g*in_img->w); base < bounds; base++) {
         float sum = 0;
         for(int k = 0; k < kern->w; k++) {
