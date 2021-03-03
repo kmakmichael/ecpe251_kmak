@@ -66,6 +66,7 @@ int main(int argc, char *argv[]) {
     float sigma;
     float a;
     size_t threadcount;
+    int merge_rounds;
     int comm_size;
     int comm_rank;
     int rc;
@@ -109,6 +110,16 @@ int main(int argc, char *argv[]) {
         read_image_template(argv[1], &image.data, &image.width, &image.height);
         // begin time
         gettimeofday(&start, NULL);
+        merge_rounds = comm_size;
+    } else {
+        merge_rounds = 1;
+        for (int n = 2; n <= comm_size; n *= 2) {
+            if (comm_rank % n) {
+                break;
+            } else {
+                merge_rounds *= 2;
+            }
+        }
     }
     
     a = round(2.5 * sigma - 0.5);
@@ -184,25 +195,32 @@ int main(int argc, char *argv[]) {
     ghost_exchange(&direction);
     suppression(&direction, &magnitude, &supp);
 
-    if (!comm_rank)
+    if (!comm_rank)  {
         gettimeofday(&sup, NULL);
-    
+    } else {
+        // allocate 2^merge_rounds chunks worth of space for the merge
+        // (merge_rounds is calculated earlier, while rank 0 is reading the image)
+        //image.data = (float *) calloc(merge_rounds * orig.d * orig.w, sizeof(float));
+    }    
+    printf("rank %d alloc'ing %d * (d*w)\n", comm_rank, merge_rounds); 
+
     // image is already divided, so merge sort each chunk
     // MPI comms are the slowest operation, this avoids any gathering
     memcpy(&temp.data[temp.g * temp.w], &supp.data[supp.g * supp.w], sizeof(float) * supp.d * supp.w);
     mergeSort(&temp.data[temp.g * temp.w], temp.w * (temp.g + temp.d), threadcount);
    
     // then merge those chunks
-    for (int n = 2; n <= comm_size; n *= 2) {
-        printf("rank %d % 2 = %d\n", comm_rank, comm_rank % n);
-        if (comm_rank % n) {
-            printf("round %d: rank %d sending to %d\n", n, comm_rank, comm_rank - (n/2));
+    // L won't be used in the ranks with merge_rounds=1, but ceil is there to keep calloc from complaining 
+    //float *L  = (float *) calloc(ceil(merge_rounds/2) * orig.d * orig.w, sizeof(float)); 
+    for (int n = 1; n < comm_size; n *= 2) {
+        if (comm_rank % (2 *n)) {
+            //MPI_Send(
+            printf("round %d: rank %d sending to %d\n", n, comm_rank, comm_rank - n);
             break;
         } else {
-            printf("round %d: rank %d receiving from %d\n", n, comm_rank, comm_rank + (n/2));
+            printf("round %d: rank %d receiving from %d\n", n, comm_rank, comm_rank + n);
         }
-    } 
-    printf("rank %d merged!\n", comm_rank);
+    }
     
     float t_high;
     if (!comm_rank) {
