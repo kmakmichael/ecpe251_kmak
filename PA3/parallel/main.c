@@ -495,6 +495,7 @@ void suppression(const chunk_s *direction, const chunk_s *magnitude, chunk_s *su
 
 void hysteresis(chunk_s *hyst, float t_high, float t_low) {
     size_t bounds = hyst->w * (hyst->g + hyst->d);
+    #pragma omp parallel for
     for (size_t i = hyst->g * hyst->w; i < bounds; i++) {
         if (hyst->data[i] >= t_high) {
             hyst->data[i] = 255;
@@ -513,6 +514,7 @@ void edge_linking(const chunk_s *hyst, chunk_s *edges) {
     size_t width = hyst->w;
     size_t btm_right = width + 1;
     size_t btm_left = width - 1;
+    #pragma omp parallel for
     for (size_t i = hyst->g * hyst->w; i < bounds; i++) {
         if(hyst->data[i] == 125) {
             edges->data[i] = 0;
@@ -581,7 +583,7 @@ void ghost_exchange(chunk_s *chunk) {
     int size, rank;
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    
+
     // send bottom downwards
     if (rank != size - 1) {
         MPI_Send(&chunk->data[chunk->d * chunk->w], chunk->w * chunk->g, MPI_FLOAT, rank + 1, 0, MPI_COMM_WORLD);
