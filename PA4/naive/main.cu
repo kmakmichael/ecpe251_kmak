@@ -19,6 +19,7 @@
 #define BLOCKSIZE 16
 
 void print_k(float *k, int len);
+float timecalc(struct timeval start, struct timeval end);
 void g_kern(float *k, float sigma);
 void g_deriv(float *k, float sigma);
 
@@ -80,6 +81,7 @@ int main(int argc, char *argv[]) {
     int width;
     float sigma;
     int kern_w;
+    struct timeval convstart, convstop, magdirstart, magdirstop, htodstart, htodstop, dtohstart, dtohstop, compstart, compstop;
 
     // host
     float *h_img;
@@ -127,6 +129,9 @@ int main(int argc, char *argv[]) {
     cudaMalloc((void **)&d_mag, sizeof(float)*width*height);
     cudaMalloc((void **)&d_dir, sizeof(float)*width*height);
 
+    // computation start
+    gettimeofday(&compstart, NULL);
+
     // prepare canny kernels
     kern_w = 2 * round(2.5 * sigma - 0.5) + 1;
     h_vkern = (float *) calloc(kern_w, sizeof(float));
@@ -145,6 +150,7 @@ int main(int argc, char *argv[]) {
     g_deriv(h_hderiv, sigma);
 
     // transfer ckernels
+    gettimeofday(&htodstart, NULL);
     cudaMemcpy(d_vkern, h_vkern, sizeof(float)*kern_w, cudaMemcpyHostToDevice);
     cudaMemcpy(d_hkern, h_hkern, sizeof(float)*kern_w, cudaMemcpyHostToDevice);
     cudaMemcpy(d_vderiv, h_vderiv, sizeof(float)*kern_w, cudaMemcpyHostToDevice);
@@ -152,25 +158,44 @@ int main(int argc, char *argv[]) {
 
     // transfer image
     cudaMemcpy(d_img, h_img, sizeof(float)*width*height, cudaMemcpyHostToDevice);
+    gettimeofday(&htodstop, NULL);
 
     // GPU convolve
     dim3 dimBlock(BLOCKSIZE, BLOCKSIZE);
     dim3 dimGrid(width/BLOCKSIZE, height/BLOCKSIZE);
+    cudaDeviceSynchronize();
+    gettimeofday(&convstart, NULL);
     gpu_hconvolve<<<dimGrid,dimBlock>>>(d_img, d_temp, width, height, d_hkern, kern_w);
     gpu_hconvolve<<<dimGrid,dimBlock>>>(d_temp, d_hori, width, height, d_hderiv, kern_w);
     gpu_vconvolve<<<dimGrid,dimBlock>>>(d_img, d_temp, width, height, d_vkern, kern_w);
     gpu_vconvolve<<<dimGrid,dimBlock>>>(d_temp, d_vert, width, height, d_vderiv, kern_w);
+    cudaDeviceSynchronize();
+    gettimeofday(&convstop, NULL);
+    gettimeofday(&magdirstart, NULL);
     gpu_magdir<<<dimGrid,dimBlock>>>(d_hori, d_vert, d_mag, d_dir, height, width);
     cudaDeviceSynchronize();
+    gettimeofday(&magdirstop, NULL);
 
     // pull results
+    gettimeofday(&dtohstart, NULL);
     cudaMemcpy(h_mag, d_mag, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     cudaMemcpy(h_dir, d_dir, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     cudaDeviceSynchronize(); 
+    gettimeofday(&dtohstop, NULL);
+
+    // computation end
+    gettimeofday(&compstop, NULL);
 
     // write results
     write_image_template<float>("magnitude.pgm", h_mag, width, height);
     write_image_template<float>("direction.pgm", h_dir, width, height);
+    printf("%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",
+        timecalc(convstart, convstop),
+        timecalc(magdirstart, magdirstop),
+        timecalc(htodstart, htodstop),
+        timecalc(dtohstart, dtohstop),
+        timecalc(compstart, compstop)
+    );
 
     // free
     free(h_vkern);
@@ -193,6 +218,12 @@ void print_k(float *k, int len) {
         printf("[%f]", k[i]);
     }
     printf("\n");
+}
+
+
+float timecalc(struct timeval start, struct timeval end) {
+    float ns = (end.tv_sec*1000000 + end.tv_usec) - (start.tv_sec*1000000 + start.tv_usec);
+    return ns / 1000.0;
 }
 
 
