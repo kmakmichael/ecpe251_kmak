@@ -26,10 +26,23 @@ void g_deriv(float *k, float sigma);
 
 __global__
 void gpu_hconvolve(float *img, float *out, int width, int height, float *kern, int kern_w) {
+    extern __shared__ float smem[]; 
+    float *s_kern = smem;
+    float *s_img = &smem[kern_w];
     int i = threadIdx.x + blockIdx.x*blockDim.x;
     int j = threadIdx.y + blockIdx.y*blockDim.y; 
+    int localidx = threadIdx.x;
+    int localidy = threadIdx.y;
+    int globalidx = localidx + blockIdx.x*blockDim.x;
+    int globalidy = localidy + blockIdx.y*blockDim.y;
     int base = i*width + j;
     int p;
+
+    // load to shared mem
+    if (localidy < kern_w)
+        s_kern[localidy] = kern[localidy];
+    s_img[localidy] = img[globalidx*width + globalidy];
+    __syncthreads();
 
     if (i < height && j < width) {
         float sum = 0;
@@ -38,7 +51,10 @@ void gpu_hconvolve(float *img, float *out, int width, int height, float *kern, i
             p = base + offset;
             if (p / width == base / width) { // same row
                 if (p >= 0 && p <= height * width) {
-                    sum += img[p] * kern[k];
+                    if (localidy + offset < blockDim.y)
+                        sum += s_img[localidy + offset] * s_kern[k];
+                    else
+                        sum += img[p] * kern[k];
                 }
             }
         }
@@ -72,6 +88,7 @@ void gpu_magdir(float *hori, float *vert, float *mag, float *dir, int height, in
     int i = threadIdx.x + blockIdx.x*blockDim.x;
     int j = threadIdx.y + blockIdx.y*blockDim.y;
     int k = i*width+j;
+
     mag[k] = sqrtf((hori[k] * hori[k]) + (vert[k] * vert[k]));
     dir[k] = atan2f(hori[k], vert[k]);
 } 
@@ -162,19 +179,30 @@ int main(int argc, char *argv[]) {
     cudaMemcpy(d_img, h_img, sizeof(float)*width*height, cudaMemcpyHostToDevice);
     gettimeofday(&htodstop, NULL);
 
-    // GPU convolve
-    dim3 dimBlock(BLOCKSIZE, BLOCKSIZE);
-    dim3 dimGrid(width/BLOCKSIZE, height/BLOCKSIZE);
+
     cudaDeviceSynchronize();
     gettimeofday(&convstart, NULL);
-    gpu_hconvolve<<<dimGrid,dimBlock>>>(d_img, d_temp, width, height, d_hkern, kern_w);
-    gpu_hconvolve<<<dimGrid,dimBlock>>>(d_temp, d_hori, width, height, d_hderiv, kern_w);
-    gpu_vconvolve<<<dimGrid,dimBlock>>>(d_img, d_temp, width, height, d_vkern, kern_w);
-    gpu_vconvolve<<<dimGrid,dimBlock>>>(d_temp, d_vert, width, height, d_vderiv, kern_w);
+
+    // horizontal convolve
+    dim3 h_dB(1, BLOCKSIZE * BLOCKSIZE);
+    dim3 h_dG(height, width/(BLOCKSIZE*BLOCKSIZE));
+    int memsize = sizeof(float) * (BLOCKSIZE*BLOCKSIZE + kern_w);
+    gpu_hconvolve<<<h_dG,h_dB,memsize>>>(d_img, d_temp, width, height, d_hkern, kern_w);
+    gpu_hconvolve<<<h_dG,h_dB,memsize>>>(d_temp, d_hori, width, height, d_hderiv, kern_w);
+
+    // vertical convolve
+    dim3 v_dB(BLOCKSIZE, BLOCKSIZE);
+    dim3 v_dG(width/BLOCKSIZE, height/BLOCKSIZE);
+    gpu_vconvolve<<<v_dG,v_dB>>>(d_img, d_temp, width, height, d_vkern, kern_w);
+    gpu_vconvolve<<<v_dG,v_dB>>>(d_temp, d_vert, width, height, d_vderiv, kern_w);
     cudaDeviceSynchronize();
     gettimeofday(&convstop, NULL);
+
+    // mag & dir
     gettimeofday(&magdirstart, NULL);
-    gpu_magdir<<<dimGrid,dimBlock>>>(d_hori, d_vert, d_mag, d_dir, height, width);
+    dim3 md_dB(BLOCKSIZE, BLOCKSIZE);
+    dim3 md_dG(width/BLOCKSIZE, height/BLOCKSIZE);
+    gpu_magdir<<<md_dG,md_dB>>>(d_hori, d_vert, d_mag, d_dir, height, width);
     cudaDeviceSynchronize();
     gettimeofday(&magdirstop, NULL);
 
@@ -182,6 +210,7 @@ int main(int argc, char *argv[]) {
     gettimeofday(&dtohstart, NULL);
     cudaMemcpy(h_mag, d_mag, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     cudaMemcpy(h_dir, d_dir, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_img, d_hori, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     cudaDeviceSynchronize(); 
     gettimeofday(&dtohstop, NULL);
 
@@ -191,6 +220,7 @@ int main(int argc, char *argv[]) {
     // write results
     write_image_template<float>("magnitude.pgm", h_mag, width, height);
     write_image_template<float>("direction.pgm", h_dir, width, height);
+    write_image_template<float>("out.pgm", h_img, width, height);
     printf("%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",
         timecalc(convstart, convstop),
         timecalc(magdirstart, magdirstop),
