@@ -160,6 +160,7 @@ int main(int argc, char *argv[]) {
 
     // transfer image
     cudaMemcpy(d_img, h_img, sizeof(float)*width*height, cudaMemcpyHostToDevice);
+    cudaDeviceSynchronize();
     gettimeofday(&htodstop, NULL);
 
     // GPU convolve

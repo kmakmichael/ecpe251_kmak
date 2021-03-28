@@ -198,6 +198,7 @@ int main(int argc, char *argv[]) {
 
     // transfer image
     cudaMemcpy(d_img, h_img, sizeof(float)*width*height, cudaMemcpyHostToDevice);
+    cudaDeviceSynchronize();
     gettimeofday(&htodstop, NULL);
 
 
@@ -231,7 +232,6 @@ int main(int argc, char *argv[]) {
     gettimeofday(&dtohstart, NULL);
     cudaMemcpy(h_mag, d_mag, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     cudaMemcpy(h_dir, d_dir, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_img, d_hori, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     cudaDeviceSynchronize(); 
     gettimeofday(&dtohstop, NULL);
 
@@ -241,7 +241,6 @@ int main(int argc, char *argv[]) {
     // write results
     write_image_template<float>("magnitude.pgm", h_mag, width, height);
     write_image_template<float>("direction.pgm", h_dir, width, height);
-    write_image_template<float>("out.pgm", h_img, width, height);
     printf("%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",
         timecalc(convstart, convstop),
         timecalc(magdirstart, magdirstop),
