@@ -22,24 +22,25 @@ void print_k(float *k, int len);
 void g_kern(float *k, float sigma);
 void g_deriv(float *k, float sigma);
 
+
 int main(int argc, char *argv[]) {
 
-    int height;
-    int width;
-    float sigma;
-    int kern_w;
+    int height = 0;
+    int width = 0;
+    float sigma = 0.0;
+    int kern_w = 0;
 
     // host
     float *h_img;
-    //float *h_mag;
-    //float *h_dir;
+    float *h_mag;
+    float *h_dir;
     float *h_vkern;
     float *h_hkern;
     float *h_vderiv;
     float *h_hderiv;
 
     // device
-    /*float *d_img;
+    float *d_img;
     float *d_temp;
     float *d_hori;
     float *d_vert;
@@ -49,8 +50,8 @@ int main(int argc, char *argv[]) {
     float *d_hkern;
     float *d_vderiv;
     float *d_hderiv;
-    */
  
+    // argparse
     if (argc != 3) {
         fprintf(stderr, "usage: ./canny <image path> <sigma>\n");
         return -1;
@@ -61,28 +62,47 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    // cuda setup
     cudaSetDevice(GPU_NO);
+    dim3 dimBlock(BLOCKSIZE, BLOCKSIZE);
+    dim3 dimGrid(width/BLOCKSIZE, height/BLOCKSIZE);
 
+    // image prep
     read_image_template(argv[1], &h_img, &width, &height);
+    h_mag = (float *) calloc(width*height, sizeof(float));
+    h_dir = (float *) calloc(width*height, sizeof(float));
+    cudaMalloc((void **)&d_img, sizeof(float)*width*height);
+    cudaMalloc((void **)&d_temp, sizeof(float)*width*height);
+    cudaMalloc((void **)&d_hori, sizeof(float)*width*height);
+    cudaMalloc((void **)&d_vert, sizeof(float)*width*height);
+    cudaMalloc((void **)&d_mag, sizeof(float)*width*height);
+    cudaMalloc((void **)&d_dir, sizeof(float)*width*height);
 
-    // prepare kernels
+    // prepare canny kernels
     kern_w = 2 * round(2.5 * sigma - 0.5) + 1;
-    
     h_vkern = (float *) calloc(kern_w, sizeof(float));
     h_hkern = (float *) calloc(kern_w, sizeof(float));
     h_vderiv = (float *) calloc(kern_w, sizeof(float));
     h_hderiv = (float *) calloc(kern_w, sizeof(float));
+    cudaMalloc((void **)&d_vkern, sizeof(float)*kern_w);
+    cudaMalloc((void **)&d_hkern, sizeof(float)*kern_w);
+    cudaMalloc((void **)&d_vderiv, sizeof(float)*kern_w);
+    cudaMalloc((void **)&d_hderiv, sizeof(float)*kern_w);
 
+    // calculate ckernels
     g_kern(h_vkern, sigma);
     g_kern(h_hkern, sigma);
     g_deriv(h_vderiv, sigma);
     g_deriv(h_hderiv, sigma);
-    print_k(h_vkern, kern_w);
-    print_k(h_hkern, kern_w);
-    print_k(h_vderiv, kern_w);
-    print_k(h_hderiv, kern_w);
 
-    // transfer kernels
+    // transfer ckernels
+    cudaMemcpy(d_vkern, h_vkern, sizeof(float)*kern_w, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_hkern, h_hkern, sizeof(float)*kern_w, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_vderiv, h_vderiv, sizeof(float)*kern_w, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_hderiv, h_hderiv, sizeof(float)*kern_w, cudaMemcpyHostToDevice);
+
+    // GPU convolution
+        
 
 
     // free
@@ -90,6 +110,14 @@ int main(int argc, char *argv[]) {
     free(h_hkern);
     free(h_vderiv);
     free(h_hderiv);
+    free(h_mag);
+    free(h_dir);
+    cudaFree(d_img);
+    cudaFree(d_temp);
+    cudaFree(d_hori);
+    cudaFree(d_vert);
+    cudaFree(d_mag);
+    cudaFree(d_dir);
 }
 
 
@@ -135,18 +163,3 @@ void g_deriv(float *k, float sigma) {
         k[i] = temp;
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
