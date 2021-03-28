@@ -16,7 +16,7 @@
 #include "image_template.h"
 
 #define GPU_NO 1 // 85 % 4
-#define BLOCKSIZE 16
+#define BLOCKSIZE 8
 
 void print_k(float *k, int len);
 float timecalc(struct timeval start, struct timeval end);
