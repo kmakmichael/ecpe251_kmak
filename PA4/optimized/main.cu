@@ -16,7 +16,6 @@
 #include "image_template.h"
 
 #define GPU_NO 1 // 85 % 4
-#define BLOCKSIZE 8
 
 void print_k(float *k, int len);
 float timecalc(struct timeval start, struct timeval end);
@@ -65,10 +64,24 @@ void gpu_hconvolve(float *img, float *out, int width, int height, float *kern, i
 
 __global__
 void gpu_vconvolve(float *img, float *out, int width, int height, float *kern, int kern_w) {
+    extern __shared__ float smem[];
+    float *s_kern = smem;
+    float *s_img = &smem[kern_w];
     int i = threadIdx.x + blockIdx.x*blockDim.x;
     int j = threadIdx.y + blockIdx.y*blockDim.y; 
+    int localidx = threadIdx.x;
+    int localidy = threadIdx.y;
+    int globalidx = localidx + blockIdx.x*blockDim.x;
+    int globalidy = localidy + blockIdx.y*blockDim.y;
     int base = i*width + j;
     int p;
+
+    // load to shared mem
+    if (localidx < kern_w)
+        s_kern[localidx] = kern[localidx];
+    s_img[localidx] = img[globalidx*width + globalidy];
+    __syncthreads();
+
 
     if (i < height && j < width) {
         float sum = 0;
@@ -76,7 +89,10 @@ void gpu_vconvolve(float *img, float *out, int width, int height, float *kern, i
             int offset = (k - floorf(kern_w/2)) * width;
             p = base + offset;
             if (p >= 0 && p < width * height) {
-                sum += img[p] * kern[k];
+                if (localidx + offset < blockDim.x) 
+                    sum += s_img[localidx] * s_kern[k];
+                else
+                    sum += img[p] * s_kern[k];
             }
         }
         out[base] = sum;
@@ -184,24 +200,26 @@ int main(int argc, char *argv[]) {
     gettimeofday(&convstart, NULL);
 
     // horizontal convolve
-    dim3 h_dB(1, BLOCKSIZE * BLOCKSIZE);
-    dim3 h_dG(height, width/(BLOCKSIZE*BLOCKSIZE));
-    int memsize = sizeof(float) * (BLOCKSIZE*BLOCKSIZE + kern_w);
+    #define conv_size 512
+    dim3 h_dB(1, conv_size);
+    dim3 h_dG(height, width/conv_size);
+    int memsize = sizeof(float) * (conv_size + kern_w);
     gpu_hconvolve<<<h_dG,h_dB,memsize>>>(d_img, d_temp, width, height, d_hkern, kern_w);
     gpu_hconvolve<<<h_dG,h_dB,memsize>>>(d_temp, d_hori, width, height, d_hderiv, kern_w);
 
     // vertical convolve
-    dim3 v_dB(BLOCKSIZE, BLOCKSIZE);
-    dim3 v_dG(width/BLOCKSIZE, height/BLOCKSIZE);
-    gpu_vconvolve<<<v_dG,v_dB>>>(d_img, d_temp, width, height, d_vkern, kern_w);
-    gpu_vconvolve<<<v_dG,v_dB>>>(d_temp, d_vert, width, height, d_vderiv, kern_w);
+    dim3 v_dB(conv_size, 1);
+    dim3 v_dG(height/conv_size, width);
+    gpu_vconvolve<<<v_dG,v_dB,memsize>>>(d_img, d_temp, width, height, d_vkern, kern_w);
+    gpu_vconvolve<<<v_dG,v_dB,memsize>>>(d_temp, d_vert, width, height, d_vderiv, kern_w);
     cudaDeviceSynchronize();
     gettimeofday(&convstop, NULL);
 
     // mag & dir
+    #define blocksize 8
     gettimeofday(&magdirstart, NULL);
-    dim3 md_dB(BLOCKSIZE, BLOCKSIZE);
-    dim3 md_dG(width/BLOCKSIZE, height/BLOCKSIZE);
+    dim3 md_dB(blocksize, blocksize);
+    dim3 md_dG(width/blocksize, height/blocksize);
     gpu_magdir<<<md_dG,md_dB>>>(d_hori, d_vert, d_mag, d_dir, height, width);
     cudaDeviceSynchronize();
     gettimeofday(&magdirstop, NULL);
