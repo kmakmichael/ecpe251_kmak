@@ -34,10 +34,12 @@ void gpu_hconvolve(float *img, float *out, int width, int height, float *kern, i
     if (i < height && j < width) {
         float sum = 0;
         for (size_t k = 0; k < kern_w; k++) {
-            int offset = k - kern_w/2;
+            int offset = k - floorf(kern_w/2);
             p = base + offset;
             if (p / width == base / width) { // same row
-                sum += img[p] * kern[k];
+                if (p >= 0 && p <= height * width) {
+                    sum += img[p] * kern[k];
+                }
             }
         }
         out[base] = sum;
@@ -55,7 +57,7 @@ void gpu_vconvolve(float *img, float *out, int width, int height, float *kern, i
     if (i < height && j < width) {
         float sum = 0;
         for (size_t k = 0; k < kern_w; k++) {
-            int offset = (k - kern_w/2) * width;
+            int offset = (k - floorf(kern_w/2)) * width;
             p = base + offset;
             if (p >= 0 && p < width * height) {
                 sum += img[p] * kern[k];
