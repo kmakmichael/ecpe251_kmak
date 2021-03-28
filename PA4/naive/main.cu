@@ -164,10 +164,10 @@ int main(int argc, char *argv[]) {
     gettimeofday(&htodstop, NULL);
 
     // GPU convolve
-    dim3 dimBlock(BLOCKSIZE, BLOCKSIZE);
-    dim3 dimGrid(width/BLOCKSIZE, height/BLOCKSIZE);
     cudaDeviceSynchronize();
     gettimeofday(&convstart, NULL);
+    dim3 dimBlock(BLOCKSIZE, BLOCKSIZE);
+    dim3 dimGrid(width/BLOCKSIZE, height/BLOCKSIZE);
     gpu_hconvolve<<<dimGrid,dimBlock>>>(d_img, d_temp, width, height, d_hkern, kern_w);
     gpu_hconvolve<<<dimGrid,dimBlock>>>(d_temp, d_hori, width, height, d_hderiv, kern_w);
     gpu_vconvolve<<<dimGrid,dimBlock>>>(d_img, d_temp, width, height, d_vkern, kern_w);
