@@ -44,6 +44,27 @@ void gpu_hconvolve(float *img, float *out, int width, int height, float *kern, i
 }
 
 
+__global__
+void gpu_vconvolve(float *img, float *out, int width, int height, float *kern, int kern_w) {
+    int i = threadIdx.x + blockIdx.x*blockDim.x;
+    int j = threadIdx.y + blockIdx.y*blockDim.y; 
+    int base = i*width + j;
+    int p;
+
+    if (i < height && j < width) {
+        float sum = 0;
+        for (size_t k = 0; k < kern_w; k++) {
+            int offset = (k - kern_w/2) * width;
+            p = base + offset;
+            if (p >= 0 && p < width * height) {
+                sum += img[p] * kern[k];
+            }
+        }
+        out[base] = sum;
+    }
+}
+
+
 int main(int argc, char *argv[]) {
 
     int height;
@@ -128,10 +149,12 @@ int main(int argc, char *argv[]) {
     dim3 dimGrid(width/BLOCKSIZE, height/BLOCKSIZE);
     gpu_hconvolve<<<dimGrid,dimBlock>>>(d_img, d_temp, width, height, d_hkern, kern_w);
     gpu_hconvolve<<<dimGrid,dimBlock>>>(d_temp, d_hori, width, height, d_hderiv, kern_w);
+    gpu_vconvolve<<<dimGrid,dimBlock>>>(d_img, d_temp, width, height, d_vkern, kern_w);
+    gpu_vconvolve<<<dimGrid,dimBlock>>>(d_temp, d_vert, width, height, d_vderiv, kern_w);
     cudaDeviceSynchronize();
 
     // pull results
-    cudaMemcpy(h_img, d_hori, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_img, d_vert, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     cudaDeviceSynchronize(); 
 
     // write results
