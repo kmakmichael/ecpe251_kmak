@@ -23,12 +23,23 @@ void g_kern(float *k, float sigma);
 void g_deriv(float *k, float sigma);
 
 
+__global__
+void gpu_convolve(float *img, float *out, int width, int height, float *kern, int kern_w) {
+    int i = threadIdx.x + blockIdx.x*blockDim.x;
+    int j = threadIdx.y + blockIdx.y*blockDim.y; 
+
+    if (i < height && j < width) {
+        out[i*width + j] = img[i*width + j];
+    }
+}
+
+
 int main(int argc, char *argv[]) {
 
-    int height = 0;
-    int width = 0;
-    float sigma = 0.0;
-    int kern_w = 0;
+    int height;
+    int width;
+    float sigma;
+    int kern_w;
 
     // host
     float *h_img;
@@ -64,11 +75,9 @@ int main(int argc, char *argv[]) {
 
     // cuda setup
     cudaSetDevice(GPU_NO);
-    dim3 dimBlock(BLOCKSIZE, BLOCKSIZE);
-    dim3 dimGrid(width/BLOCKSIZE, height/BLOCKSIZE);
 
     // image prep
-    read_image_template(argv[1], &h_img, &width, &height);
+    read_image_template<float>(argv[1], &h_img, &width, &height);
     h_mag = (float *) calloc(width*height, sizeof(float));
     h_dir = (float *) calloc(width*height, sizeof(float));
     cudaMalloc((void **)&d_img, sizeof(float)*width*height);
@@ -101,9 +110,21 @@ int main(int argc, char *argv[]) {
     cudaMemcpy(d_vderiv, h_vderiv, sizeof(float)*kern_w, cudaMemcpyHostToDevice);
     cudaMemcpy(d_hderiv, h_hderiv, sizeof(float)*kern_w, cudaMemcpyHostToDevice);
 
-    // GPU convolution
-        
+    // transfer image
+    cudaMemcpy(d_img, h_img, sizeof(float)*width*height, cudaMemcpyHostToDevice);
 
+    // GPU convolve
+    dim3 dimBlock(BLOCKSIZE, BLOCKSIZE);
+    dim3 dimGrid(width/BLOCKSIZE, height/BLOCKSIZE);
+    gpu_convolve<<<dimGrid,dimBlock>>>(d_img, d_temp, width, height, d_vkern, kern_w);
+    cudaDeviceSynchronize();
+
+    // pull results
+    cudaMemcpy(h_img, d_temp, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
+    cudaDeviceSynchronize(); 
+
+    // write results
+    write_image_template<float>("out.pgm", h_img, width, height);
 
     // free
     free(h_vkern);
