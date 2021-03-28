@@ -64,6 +64,15 @@ void gpu_vconvolve(float *img, float *out, int width, int height, float *kern, i
     }
 }
 
+__global__
+void gpu_magdir(float *hori, float *vert, float *mag, float *dir, int height, int width) {
+    int i = threadIdx.x + blockIdx.x*blockDim.x;
+    int j = threadIdx.y + blockIdx.y*blockDim.y;
+    int k = i*width+j;
+    mag[k] = sqrtf((hori[k] * hori[k]) + (vert[k] * vert[k]));
+    dir[k] = atan2f(hori[k], vert[k]);
+} 
+
 
 int main(int argc, char *argv[]) {
 
@@ -151,14 +160,17 @@ int main(int argc, char *argv[]) {
     gpu_hconvolve<<<dimGrid,dimBlock>>>(d_temp, d_hori, width, height, d_hderiv, kern_w);
     gpu_vconvolve<<<dimGrid,dimBlock>>>(d_img, d_temp, width, height, d_vkern, kern_w);
     gpu_vconvolve<<<dimGrid,dimBlock>>>(d_temp, d_vert, width, height, d_vderiv, kern_w);
+    gpu_magdir<<<dimGrid,dimBlock>>>(d_hori, d_vert, d_mag, d_dir, height, width);
     cudaDeviceSynchronize();
 
     // pull results
-    cudaMemcpy(h_img, d_vert, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_mag, d_mag, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_dir, d_dir, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     cudaDeviceSynchronize(); 
 
     // write results
-    write_image_template<float>("out.pgm", h_img, width, height);
+    write_image_template<float>("magnitude.pgm", h_mag, width, height);
+    write_image_template<float>("direction.pgm", h_dir, width, height);
 
     // free
     free(h_vkern);
