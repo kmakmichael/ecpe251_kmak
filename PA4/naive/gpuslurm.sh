@@ -6,5 +6,5 @@
 #SBATCH --tasks-per-node=1      ### Number of tasks
 
 for((i=0;i<1;i++)) do
-	srun ./canny ~/lennas/Lenna_org_4096.pgm
+	srun ./canny ~/lennas/Lenna_org_4096.pgm 0.6
 done

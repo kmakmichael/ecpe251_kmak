@@ -5,4 +5,4 @@
 #SBATCH --nodes=1          	    ### Number of Nodes
 #SBATCH --tasks-per-node=1 	    ### Number of tasks
 
-srun ./canny ~/lennas/Lenna_org_2048.pgm
+srun ./canny ~/lennas/Lenna_org_2048.pgm 0.6 > tout.csv
