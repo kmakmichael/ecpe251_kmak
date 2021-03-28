@@ -16,6 +16,9 @@
 #include "image_template.h"
 
 #define GPU_NO 1 // 85 % 4
+#define blocksize 8
+#define conv_size 512
+
 
 void print_k(float *k, int len);
 float timecalc(struct timeval start, struct timeval end);
@@ -104,9 +107,11 @@ void gpu_magdir(float *hori, float *vert, float *mag, float *dir, int height, in
     int i = threadIdx.x + blockIdx.x*blockDim.x;
     int j = threadIdx.y + blockIdx.y*blockDim.y;
     int k = i*width+j;
+    float ho = hori[k];
+    float ve = vert[k];
 
-    mag[k] = sqrtf((hori[k] * hori[k]) + (vert[k] * vert[k]));
-    dir[k] = atan2f(hori[k], vert[k]);
+    mag[k] = sqrtf((ho * ho) + (ve * ve));
+    dir[k] = atan2f(ho, ve);
 } 
 
 
@@ -200,7 +205,6 @@ int main(int argc, char *argv[]) {
     gettimeofday(&convstart, NULL);
 
     // horizontal convolve
-    #define conv_size 512
     dim3 h_dB(1, conv_size);
     dim3 h_dG(height, width/conv_size);
     int memsize = sizeof(float) * (conv_size + kern_w);
@@ -216,13 +220,15 @@ int main(int argc, char *argv[]) {
     gettimeofday(&convstop, NULL);
 
     // mag & dir
-    #define blocksize 8
     gettimeofday(&magdirstart, NULL);
     dim3 md_dB(blocksize, blocksize);
     dim3 md_dG(width/blocksize, height/blocksize);
     gpu_magdir<<<md_dG,md_dB>>>(d_hori, d_vert, d_mag, d_dir, height, width);
     cudaDeviceSynchronize();
     gettimeofday(&magdirstop, NULL);
+
+    // computation end
+    gettimeofday(&compstop, NULL);
 
     // pull results
     gettimeofday(&dtohstart, NULL);
@@ -231,9 +237,6 @@ int main(int argc, char *argv[]) {
     cudaMemcpy(h_img, d_hori, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     cudaDeviceSynchronize(); 
     gettimeofday(&dtohstop, NULL);
-
-    // computation end
-    gettimeofday(&compstop, NULL);
 
     // write results
     write_image_template<float>("magnitude.pgm", h_mag, width, height);
