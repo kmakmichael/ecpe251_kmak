@@ -142,20 +142,20 @@ void gpu_suppression(float *Gxy, float *dir, float *supp, int height, int width)
         }
         // bottom
         if (k < bounds - width) {
-            if (Gxy[i] < Gxy[k + width]) {
+            if (Gxy[k] < Gxy[k + width]) {
                 suppval = 0;
             }
         }
     } else if (theta > 22.5 && theta <= 67.5) {
         //topleft
         if (k >= width && k % width > 0) {
-            if (Gxy[i] < Gxy[k - btm_right]) {
+            if (Gxy[k] < Gxy[k - btm_right]) {
                 suppval = 0;
             }
         }
         // bottomright
         if (k < bounds - width && k % width < width-1) {
-            if (Gxy[i] < Gxy[i + btm_right]) {
+            if (Gxy[k] < Gxy[k + btm_right]) {
                 suppval = 0;
             }
         }
