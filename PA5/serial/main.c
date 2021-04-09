@@ -141,13 +141,11 @@ int main(int argc, char *argv[]) {
 
     float t_high = temp.data[(int) (temp.height * temp.width * 0.9)];
     float t_low = t_high * 0.2;
-   
-    write_image_template("sorted.pgm", temp.data, temp.width, temp.height);
  
     gettimeofday(&sort, NULL);
 
-    memcpy(hyst.data, supp.data, sizeof(float) * supp.height * supp.width);
-    hysteresis(&hyst, t_high, t_low);
+    memcpy(temp.data, supp.data, sizeof(float) * supp.height * supp.width);
+    hysteresis(&temp, t_high, t_low);
 
     gettimeofday(&doublethresh, NULL);
 
@@ -158,9 +156,6 @@ int main(int argc, char *argv[]) {
     // stop time
     gettimeofday(&compend, NULL);
     
-    //write_image_template("direction.pgm", direction.data, direction.width, direction.height);
-    //write_image_template("magnitude.pgm", magnitude.data, magnitude.width, magnitude.height);
-    //write_image_template("suppression.pgm", supp.data, supp.width, supp.height);
     write_image_template("output.pgm", hyst.data, hyst.width, hyst.height);
 
     gettimeofday(&end, NULL);
