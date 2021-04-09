@@ -19,6 +19,8 @@
 #define blocksize 8
 #define conv_size 512
 
+#define debug_mode
+
 
 void print_k(float *k, int len);
 float timecalc(struct timeval start, struct timeval end);
@@ -121,7 +123,10 @@ int main(int argc, char *argv[]) {
     int width;
     float sigma;
     int kern_w;
-    struct timeval convstart, convstop, magdirstart, magdirstop, htodstart, htodstop, dtohstart, dtohstop, compstart, compstop;
+    struct timeval start, stop, compstart, compend;
+    #ifdef debug_mode
+    float commtime, convtime, magdirtime, supptime, sorttime, hysttime, edgetime;
+    #endif
 
     // host
     float *h_img;
@@ -190,7 +195,9 @@ int main(int argc, char *argv[]) {
     g_deriv(h_hderiv, sigma);
 
     // transfer ckernels
-    gettimeofday(&htodstart, NULL);
+    #ifdef debug_mode
+    gettimeofday(&start, NULL);
+    #endif
     cudaMemcpy(d_vkern, h_vkern, sizeof(float)*kern_w, cudaMemcpyHostToDevice);
     cudaMemcpy(d_hkern, h_hkern, sizeof(float)*kern_w, cudaMemcpyHostToDevice);
     cudaMemcpy(d_vderiv, h_vderiv, sizeof(float)*kern_w, cudaMemcpyHostToDevice);
@@ -199,11 +206,15 @@ int main(int argc, char *argv[]) {
     // transfer image
     cudaMemcpy(d_img, h_img, sizeof(float)*width*height, cudaMemcpyHostToDevice);
     cudaDeviceSynchronize();
-    gettimeofday(&htodstop, NULL);
-
+    #ifdef debug_mode
+    gettimeofday(&stop, NULL);
+    commtime = timecalc(start, stop);
+    #endif
 
     cudaDeviceSynchronize();
-    gettimeofday(&convstart, NULL);
+    #ifdef debug_mode
+    gettimeofday(&start, NULL);
+    #endif
 
     // horizontal convolve
     dim3 h_dB(1, conv_size);
@@ -218,36 +229,89 @@ int main(int argc, char *argv[]) {
     gpu_vconvolve<<<v_dG,v_dB,memsize>>>(d_img, d_temp, width, height, d_vkern, kern_w);
     gpu_vconvolve<<<v_dG,v_dB,memsize>>>(d_temp, d_vert, width, height, d_vderiv, kern_w);
     cudaDeviceSynchronize();
-    gettimeofday(&convstop, NULL);
+    #ifdef debug_mode
+    gettimeofday(&stop, NULL);
+    convtime = timecalc(start, stop);
+    gettimeofday(&start, NULL);
+    #endif
 
-    // mag & dir
-    gettimeofday(&magdirstart, NULL);
+    //mag & dir
     dim3 md_dB(blocksize, blocksize);
     dim3 md_dG(width/blocksize, height/blocksize);
     gpu_magdir<<<md_dG,md_dB>>>(d_hori, d_vert, d_mag, d_dir, height, width);
     cudaDeviceSynchronize();
-    gettimeofday(&magdirstop, NULL);
+    #ifdef debug_mode
+    gettimeofday(&stop, NULL);
+    magdirtime = timecalc(start, stop);
+    gettimeofday(&start, NULL);
+    #endif
+
+    // suppression
+
+    #ifdef debug_mode
+    gettimeofday(&stop, NULL);
+    supptime = timecalc(start, stop);
+    gettimeofday(&start, NULL);
+    #endif
+
+    // sorting
+
+    #ifdef debug_mode
+    gettimeofday(&stop, NULL);
+    sorttime = timecalc(start, stop);
+    gettimeofday(&start, NULL);
+    #endif
+
+
+    // hysteresis
+
+    #ifdef debug_mode
+    gettimeofday(&stop, NULL);
+    hysttime = timecalc(start, stop);
+    gettimeofday(&start, NULL);
+    #endif
+
+
+    // edge linking
+
+    #ifdef debug_mode
+    gettimeofday(&stop, NULL);
+    edgetime = timecalc(start, stop);
+    gettimeofday(&start, NULL);
+    #endif
 
     // pull results
-    gettimeofday(&dtohstart, NULL);
     cudaMemcpy(h_mag, d_mag, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     cudaMemcpy(h_dir, d_dir, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     cudaDeviceSynchronize(); 
-    gettimeofday(&dtohstop, NULL);
+    #ifdef debug_mode
+    gettimeofday(&stop, NULL);
+    commtime += timecalc(start, stop);
+    #endif
 
     // computation end
-    gettimeofday(&compstop, NULL);
+    gettimeofday(&compend, NULL);
 
     // write results
+    #ifdef debug_mode
     write_image_template<float>("magnitude.pgm", h_mag, width, height);
     write_image_template<float>("direction.pgm", h_dir, width, height);
-    printf("%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",
-        timecalc(convstart, convstop),
-        timecalc(magdirstart, magdirstop),
-        timecalc(htodstart, htodstop),
-        timecalc(dtohstart, dtohstop),
-        timecalc(compstart, compstop)
+    #endif
+
+    #ifndef debug_mode
+    printf("%d, %0.2f\n", height, timecalc(compstart, compend)); 
+    #else
+    printf("%0.2f,%0.2f,%0.2f,%0.2f,%0.2f, %0.2f, %0.2f, %0.2f\n",
+        convtime,
+        magdirtime,
+        supptime,
+        sorttime,
+        hysttime,
+        edgetime,
+        commtime,
+        timecalc(compstart, compend)
     );
+    #endif
 
     // free
     free(h_vkern);
