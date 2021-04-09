@@ -7,5 +7,7 @@
 #SBATCH --ntasks-per-node=1   ### Number of tasks (MPI processes)
 
 for i in 256, 512, 1024, 2048, 4096, 8192, 10240 do
-    srun ./canny ~/lennas/Lenna_org_$i.pgm 0.6>>Serial.csv
+    for((j=0;j<30;j++)) do
+        srun ./canny ~/lennas/Lenna_org_$i.pgm 0.6>>Serial.csv
+    done
 done
