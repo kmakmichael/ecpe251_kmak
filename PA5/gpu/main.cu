@@ -192,6 +192,23 @@ void gpu_suppression(float *Gxy, float *dir, float *supp, int height, int width)
     supp[k] = suppval;
 }
 
+
+__global__
+void gpu_hysteresis(float *hyst, float width, float t_hi, float t_lo) {
+    int i = threadIdx.x + blockIdx.x*blockDim.x;
+    int j = threadIdx.y + blockIdx.y*blockDim.y;
+    int k = i*width+j;
+
+    if (hyst[k] >= t_hi) {
+        hyst[k] = 255.0;
+    } else if (hyst[k] <= t_lo) {
+        hyst[k] = 0.0;
+    } else {
+        hyst[k] = 125.0;
+    }
+}
+
+
 int main(int argc, char *argv[]) {
 
     int height;
@@ -323,9 +340,9 @@ int main(int argc, char *argv[]) {
     #endif
 
     //mag & dir
-    dim3 md_dB(blocksize, blocksize);
-    dim3 md_dG(width/blocksize, height/blocksize);
-    gpu_magdir<<<md_dG,md_dB>>>(d_hori, d_vert, d_mag, d_dir, height, width);
+    dim3 dB(blocksize, blocksize);
+    dim3 dG(width/blocksize, height/blocksize);
+    gpu_magdir<<<dG,dB>>>(d_hori, d_vert, d_mag, d_dir, height, width);
     cudaDeviceSynchronize();
     #ifdef debug_mode
     gettimeofday(&stop, NULL);
@@ -334,7 +351,7 @@ int main(int argc, char *argv[]) {
     #endif
 
     // suppression
-    gpu_suppression<<<md_dG,md_dB>>>(d_mag, d_dir, d_supp, height, width);
+    gpu_suppression<<<dG,dB>>>(d_mag, d_dir, d_supp, height, width);
     cudaDeviceSynchronize();
     #ifdef debug_mode
     gettimeofday(&stop, NULL);
@@ -343,13 +360,14 @@ int main(int argc, char *argv[]) {
     #endif
 
     // sorting
-    cudaMemcpy(d_temp, d_supp, sizeof(float)*height*width, cudaMemcpyDeviceToDevice);
-    thrust::device_ptr<float> thr_d(d_temp);
+    cudaMemcpy(d_hyst, d_supp, sizeof(float)*height*width, cudaMemcpyDeviceToDevice);
+    thrust::device_ptr<float> thr_d(d_hyst);
     thrust::device_vector<float> d_hyst_vec(thr_d,thr_d+(height*width));
     thrust::sort(d_hyst_vec.begin(),d_hyst_vec.end());
     int index = (int) (0.9 * height*width);
     float t_hi = d_hyst_vec[index];
     float t_lo = t_hi * 0.2;
+    cudaDeviceSynchronize();
     #ifdef debug_mode
     gettimeofday(&stop, NULL);
     sorttime = timecalc(start, stop);
@@ -358,7 +376,8 @@ int main(int argc, char *argv[]) {
 
 
     // hysteresis
-
+    gpu_hysteresis<<<dG,dB>>>(d_hyst, width, t_hi, t_lo);
+    cudaDeviceSynchronize();
     #ifdef debug_mode
     gettimeofday(&stop, NULL);
     hysttime = timecalc(start, stop);
@@ -382,7 +401,7 @@ int main(int argc, char *argv[]) {
     cudaMemcpy(h_hyst, d_hyst, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     cudaMemcpy(h_edge, d_edge, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     #endif
-    cudaMemcpy(h_img, d_temp, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_img, d_edge, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     cudaDeviceSynchronize(); 
     #ifdef debug_mode
     gettimeofday(&stop, NULL);
@@ -403,10 +422,10 @@ int main(int argc, char *argv[]) {
     write_image_template<float>("out.pgm", h_img, width, height);
 
     #ifndef debug_mode
-    printf("%d, %0.2f\n", height, timecalc(compstart, compend)); 
+    printf("%d, %0.3f\n", height, timecalc(compstart, compend)); 
     #else
-    //printf("idx=%d, hi=%0.2f, lo=%0.2f\n", index, t_hi, t_lo);
-    printf("%0.2f,%0.2f,%0.2f,%0.2f,%0.2f, %0.2f, %0.2f, %0.2f\n",
+    printf("idx=%d, hi=%0.2f, lo=%0.2f\n", index, t_hi, t_lo);
+    printf("%0.3f,%0.3f,%0.3f,%0.3f,%0.3f, %0.3f, %0.3f, %0.3f\n",
         convtime,
         magdirtime,
         supptime,
