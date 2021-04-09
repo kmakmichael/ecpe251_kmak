@@ -17,7 +17,7 @@
 #include "sort.h"
 #include "image_template.h"
 
-#define timing_mode 1
+#define timing_mode 0
 
 // structs
 typedef struct {
@@ -158,19 +158,16 @@ int main(int argc, char *argv[]) {
     // stop time
     gettimeofday(&compend, NULL);
     
-    write_image_template("direction.pgm", direction.data, direction.width, direction.height);
-    write_image_template("magnitude.pgm", magnitude.data, magnitude.width, magnitude.height);
-    write_image_template("suppression.pgm", supp.data, supp.width, supp.height);
-    write_image_template("hysteresis.pgm", hyst.data, hyst.width, hyst.height);
+    //write_image_template("direction.pgm", direction.data, direction.width, direction.height);
+    //write_image_template("magnitude.pgm", magnitude.data, magnitude.width, magnitude.height);
+    //write_image_template("suppression.pgm", supp.data, supp.width, supp.height);
+    write_image_template("output.pgm", hyst.data, hyst.width, hyst.height);
 
     gettimeofday(&end, NULL);
 
-    printf("%d, %.1f, %zu, %.1f, %.1f\n", 
-        image.height, 
-        sigma, 
-        numthreads, 
-        timecalc(compstart, end), 
-        timecalc(start, end)
+    printf("%d, %0.3f\n",
+        image.height,
+        timecalc(compstart, end)
     );
 
     if (timing_mode) {
