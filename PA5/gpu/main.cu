@@ -209,6 +209,72 @@ void gpu_hysteresis(float *hyst, float width, float t_hi, float t_lo) {
 }
 
 
+__global__
+void gpu_edgelinking(float *hyst, float *edge, int width, int height) { 
+    int i = threadIdx.x + blockIdx.x*blockDim.x;
+    int j = threadIdx.y + blockIdx.y*blockDim.y;
+    int k = i*width+j;
+    int bounds = width * height;
+    int btm_right = width + 1;
+    int btm_left = width - 1;
+    int edgeval = 0;
+
+    if(hyst[k] == 125) {
+        edge[k] = 0;
+        // topleft
+        if (k >= width && k % width > 0) {
+            if (hyst[k - btm_right] == 255) {
+                edge[k] = 255;
+            }
+        }
+        // top
+        if (k >= width) {
+            if (hyst[k - width] == 255) {
+                edge[k] = 255;
+            }
+        }
+        // topright
+        if (k >= width && k % width < width-1) {
+            if (hyst[k - btm_left] == 255) {
+                edge[k] = 255;
+            }
+        }
+        // left
+        if (k % width > 0) {
+            if (hyst[k - 1] == 255) {
+                edge[k] = 255;
+            }
+        }
+        // right
+        if (k % width > width-1) {
+            if (hyst[k + 1] == 255) {
+                edge[k] = 255;
+            }
+        }
+        // bottomleft
+        if (k < bounds - width && k % width > 0) {
+            if (hyst[k + btm_left] == 255) {
+                edge[k] = 255;
+            }
+        }
+        // bottom
+        if (k < bounds - width) {
+            if (hyst[k + width] == 255) {
+                edge[k] = 255;
+            }
+        }
+        // bottomright
+        if (k < bounds - width && k % width < width-1) {
+            if (hyst[k + btm_right] == 255) {
+                edge[k] = 255;
+            }
+        }
+    } else {
+        edge[k] = hyst[k];
+    }
+}
+
+
 int main(int argc, char *argv[]) {
 
     int height;
@@ -386,7 +452,8 @@ int main(int argc, char *argv[]) {
 
 
     // edge linking
-
+    gpu_edgelinking<<<dG,dB>>>(d_hyst, d_edge, height, width);
+    cudaDeviceSynchronize();
     #ifdef debug_mode
     gettimeofday(&stop, NULL);
     edgetime = timecalc(start, stop);
@@ -399,7 +466,6 @@ int main(int argc, char *argv[]) {
     cudaMemcpy(h_dir, d_dir, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     cudaMemcpy(h_supp, d_supp, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     cudaMemcpy(h_hyst, d_hyst, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_edge, d_edge, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     #endif
     cudaMemcpy(h_img, d_edge, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     cudaDeviceSynchronize(); 
@@ -417,7 +483,6 @@ int main(int argc, char *argv[]) {
     write_image_template<float>("direction.pgm", h_dir, width, height);
     write_image_template<float>("suppression.pgm", h_supp, width, height);
     write_image_template<float>("hysteresis.pgm", h_hyst, width, height);
-    write_image_template<float>("edge_linking.pgm", h_edge, width, height);
     #endif
     write_image_template<float>("out.pgm", h_img, width, height);
 
