@@ -93,7 +93,7 @@ void gpu_vconvolve(float *img, float *out, int width, int height, float *kern, i
             p = base + offset;
             if (p >= 0 && p < width * height) {
                 if (localidx + offset < blockDim.x) 
-                    sum += s_img[localidx] * s_kern[k];
+                    sum += s_img[localidx + offset] * s_kern[k];
                 else
                     sum += img[p] * s_kern[k];
             }

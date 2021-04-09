@@ -1,6 +1,6 @@
 # The variable CC specifies which compiler will be used.
 # (because different unix systems may use different compilers)
-CC=nvcc
+CC=nvcc -lineinfo
 
 # The variable CFLAGS specifies compiler options
 #   -c :    Only compile (don't link)
