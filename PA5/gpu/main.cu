@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <sys/time.h>
+#include <math_constants.h>
 
 //#include "sort.h"
 #include "image_template.h"
@@ -117,6 +118,77 @@ void gpu_magdir(float *hori, float *vert, float *mag, float *dir, int height, in
 } 
 
 
+__global__
+void gpu_suppression(float *Gxy, float *dir, float *supp, int height, int width) {
+    int i = threadIdx.x + blockIdx.x*blockDim.x;
+    int j = threadIdx.y + blockIdx.y*blockDim.y; 
+    int k = i*width + j;
+    size_t bounds = width * height;
+    size_t btm_right = width + 1;
+    size_t btm_left = width - 1;
+    float suppval;    
+
+    float theta = dir[k];
+    if (theta <= 0)
+        theta += CUDART_PI_F;
+    theta *= (180.0 / CUDART_PI_F);
+    suppval = Gxy[k];
+    if (theta <= 22.5 || theta > 157.5) {
+        // top
+        if (k >= width) {
+            if (Gxy[k] < Gxy[k - width]) {
+                suppval = 0;
+            }
+        }
+        // bottom
+        if (k < bounds - width) {
+            if (Gxy[i] < Gxy[k + width]) {
+                suppval = 0;
+            }
+        }
+    } else if (theta > 22.5 && theta <= 67.5) {
+        //topleft
+        if (k >= width && k % width > 0) {
+            if (Gxy[i] < Gxy[k - btm_right]) {
+                suppval = 0;
+            }
+        }
+        // bottomright
+        if (k < bounds - width && k % width < width-1) {
+            if (Gxy[i] < Gxy[i + btm_right]) {
+                suppval = 0;
+            }
+        }
+    } else if (theta > 67.5 && theta <= 112.5) {
+        // left
+        if (k % width > 0) {
+            if (Gxy[k] < Gxy[k - 1]) {
+                suppval = 0;
+            }
+        }       
+        // right
+        if (k % width < width-1) {
+            if (Gxy[k] < Gxy[k + 1]) {
+                suppval = 0;
+            }
+        }
+    } else if (theta > 112.5 && theta <= 157.5) {
+        // topright
+        if (k >= width && k % width < width-1) {
+            if (Gxy[k] < Gxy[k - btm_left]) {
+                suppval = 0;
+            }
+        }
+        // bottomleft
+        if (k < bounds - width && k % width > 0) {
+            if (Gxy[k] < Gxy[k + btm_left]) {
+                suppval = 0;
+            }
+        }
+    }
+    supp[k] = suppval;
+}
+
 int main(int argc, char *argv[]) {
 
     int height;
@@ -132,6 +204,7 @@ int main(int argc, char *argv[]) {
     float *h_img;
     float *h_mag;
     float *h_dir;
+    float *h_supp;
     float *h_vkern;
     float *h_hkern;
     float *h_vderiv;
@@ -144,6 +217,7 @@ int main(int argc, char *argv[]) {
     float *d_vert;
     float *d_mag;
     float *d_dir;
+    float *d_supp;
     float *d_vkern;
     float *d_hkern;
     float *d_vderiv;
@@ -167,12 +241,14 @@ int main(int argc, char *argv[]) {
     read_image_template<float>(argv[1], &h_img, &width, &height);
     h_mag = (float *) calloc(width*height, sizeof(float));
     h_dir = (float *) calloc(width*height, sizeof(float));
+    h_supp = (float *) calloc(width*height, sizeof(float));
     cudaMalloc((void **)&d_img, sizeof(float)*width*height);
     cudaMalloc((void **)&d_temp, sizeof(float)*width*height);
     cudaMalloc((void **)&d_hori, sizeof(float)*width*height);
     cudaMalloc((void **)&d_vert, sizeof(float)*width*height);
     cudaMalloc((void **)&d_mag, sizeof(float)*width*height);
     cudaMalloc((void **)&d_dir, sizeof(float)*width*height);
+    cudaMalloc((void **)&d_supp, sizeof(float)*width*height);
 
     // computation start
     gettimeofday(&compstart, NULL);
@@ -247,7 +323,8 @@ int main(int argc, char *argv[]) {
     #endif
 
     // suppression
-
+    gpu_suppression<<<md_dG,md_dB>>>(d_mag, d_dir, d_supp, height, width);
+    cudaDeviceSynchronize();
     #ifdef debug_mode
     gettimeofday(&stop, NULL);
     supptime = timecalc(start, stop);
@@ -281,8 +358,11 @@ int main(int argc, char *argv[]) {
     #endif
 
     // pull results
+    #ifdef debug_mode 
     cudaMemcpy(h_mag, d_mag, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     cudaMemcpy(h_dir, d_dir, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_supp, d_supp, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
+    #endif
     cudaDeviceSynchronize(); 
     #ifdef debug_mode
     gettimeofday(&stop, NULL);
@@ -296,6 +376,7 @@ int main(int argc, char *argv[]) {
     #ifdef debug_mode
     write_image_template<float>("magnitude.pgm", h_mag, width, height);
     write_image_template<float>("direction.pgm", h_dir, width, height);
+    write_image_template<float>("suppression.pgm", h_supp, width, height);
     #endif
 
     #ifndef debug_mode
