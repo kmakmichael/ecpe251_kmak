@@ -12,8 +12,11 @@
 #include <math.h>
 #include <sys/time.h>
 #include <math_constants.h>
+#include <thrust/device_vector.h>
+#include <thrust/host_vector.h>
+#include <thrust/sort.h>
+#include <thrust/copy.h>
 
-//#include "sort.h"
 #include "image_template.h"
 
 #define GPU_NO 1 // 85 % 4
@@ -205,6 +208,8 @@ int main(int argc, char *argv[]) {
     float *h_mag;
     float *h_dir;
     float *h_supp;
+    float *h_hyst;
+    float *h_edge;
     float *h_vkern;
     float *h_hkern;
     float *h_vderiv;
@@ -218,6 +223,8 @@ int main(int argc, char *argv[]) {
     float *d_mag;
     float *d_dir;
     float *d_supp;
+    float *d_hyst;
+    float *d_edge;
     float *d_vkern;
     float *d_hkern;
     float *d_vderiv;
@@ -242,6 +249,8 @@ int main(int argc, char *argv[]) {
     h_mag = (float *) calloc(width*height, sizeof(float));
     h_dir = (float *) calloc(width*height, sizeof(float));
     h_supp = (float *) calloc(width*height, sizeof(float));
+    h_hyst = (float *) calloc(width*height, sizeof(float));
+    h_edge = (float *) calloc(width*height, sizeof(float));
     cudaMalloc((void **)&d_img, sizeof(float)*width*height);
     cudaMalloc((void **)&d_temp, sizeof(float)*width*height);
     cudaMalloc((void **)&d_hori, sizeof(float)*width*height);
@@ -249,6 +258,8 @@ int main(int argc, char *argv[]) {
     cudaMalloc((void **)&d_mag, sizeof(float)*width*height);
     cudaMalloc((void **)&d_dir, sizeof(float)*width*height);
     cudaMalloc((void **)&d_supp, sizeof(float)*width*height);
+    cudaMalloc((void **)&d_hyst, sizeof(float)*width*height);
+    cudaMalloc((void **)&d_edge, sizeof(float)*width*height);
 
     // computation start
     gettimeofday(&compstart, NULL);
@@ -332,7 +343,13 @@ int main(int argc, char *argv[]) {
     #endif
 
     // sorting
-
+    cudaMemcpy(d_temp, d_supp, sizeof(float)*height*width, cudaMemcpyDeviceToDevice);
+    thrust::device_ptr<float> thr_d(d_temp);
+    thrust::device_vector<float> d_hyst_vec(thr_d,thr_d+(height*width));
+    thrust::sort(d_hyst_vec.begin(),d_hyst_vec.end());
+    int index = (int) (0.9 * height*width);
+    float t_hi = d_hyst_vec[index];
+    float t_lo = t_hi * 0.2;
     #ifdef debug_mode
     gettimeofday(&stop, NULL);
     sorttime = timecalc(start, stop);
@@ -362,7 +379,10 @@ int main(int argc, char *argv[]) {
     cudaMemcpy(h_mag, d_mag, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     cudaMemcpy(h_dir, d_dir, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     cudaMemcpy(h_supp, d_supp, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_hyst, d_hyst, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_edge, d_edge, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     #endif
+    cudaMemcpy(h_img, d_temp, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     cudaDeviceSynchronize(); 
     #ifdef debug_mode
     gettimeofday(&stop, NULL);
@@ -377,11 +397,15 @@ int main(int argc, char *argv[]) {
     write_image_template<float>("magnitude.pgm", h_mag, width, height);
     write_image_template<float>("direction.pgm", h_dir, width, height);
     write_image_template<float>("suppression.pgm", h_supp, width, height);
+    write_image_template<float>("hysteresis.pgm", h_hyst, width, height);
+    write_image_template<float>("edge_linking.pgm", h_edge, width, height);
     #endif
+    write_image_template<float>("out.pgm", h_img, width, height);
 
     #ifndef debug_mode
     printf("%d, %0.2f\n", height, timecalc(compstart, compend)); 
     #else
+    //printf("idx=%d, hi=%0.2f, lo=%0.2f\n", index, t_hi, t_lo);
     printf("%0.2f,%0.2f,%0.2f,%0.2f,%0.2f, %0.2f, %0.2f, %0.2f\n",
         convtime,
         magdirtime,
@@ -401,12 +425,18 @@ int main(int argc, char *argv[]) {
     free(h_hderiv);
     free(h_mag);
     free(h_dir);
+    free(h_supp);
+    free(h_hyst);
+    free(h_edge);
     cudaFree(d_img);
     cudaFree(d_temp);
     cudaFree(d_hori);
     cudaFree(d_vert);
     cudaFree(d_mag);
     cudaFree(d_dir);
+    cudaFree(d_supp);
+    cudaFree(d_hyst);
+    cudaFree(d_edge);
 }
 
 
