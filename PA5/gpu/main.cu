@@ -23,7 +23,7 @@
 #define blocksize 8
 #define conv_size 512
 
-#define debug_mode
+//#define debug_mode
 
 
 void print_k(float *k, int len);
@@ -340,8 +340,9 @@ int main(int argc, char *argv[]) {
     int width;
     float sigma;
     int kern_w;
-    struct timeval start, stop, compstart, compend;
+    struct timeval compstart, compend;
     #ifdef debug_mode
+    struct timeval start, stop;
     float commtime, convtime, magdirtime, supptime, sorttime, hysttime, edgetime;
     #endif
 
@@ -550,7 +551,7 @@ int main(int argc, char *argv[]) {
     printf("%d, %0.3f\n", height, timecalc(compstart, compend)); 
     #else
     //printf("idx=%d, hi=%0.2f, lo=%0.2f\n", index, t_hi, t_lo);
-    printf("%0.3f,%0.3f,%0.3f,%0.3f,%0.3f, %0.3f, %0.3f, %0.3f\n",
+    printf("%0.3f, %0.3f, %0.3f, %0.3f, %0.3f, %0.3f, %0.3f, %0.3f\n",
         convtime,
         magdirtime,
         supptime,
