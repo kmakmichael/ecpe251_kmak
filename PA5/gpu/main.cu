@@ -276,58 +276,58 @@ void gpu_edgelinking(float *hyst, float *edge, int width, int height) {
     int bounds = width * height;
     int btm_right = width + 1;
     int btm_left = width - 1;
-    int edgeval = 0;
 
     if(hyst[k] == 125) {
-        edge[k] = 0;
+        int edgeval = 0;
         // topleft
         if (k >= width && k % width > 0) {
             if (hyst[k - btm_right] == 255) {
-                edge[k] = 255;
+                edgeval = 255;
             }
         }
         // top
         if (k >= width) {
             if (hyst[k - width] == 255) {
-                edge[k] = 255;
+                edgeval = 255;
             }
         }
         // topright
         if (k >= width && k % width < width-1) {
             if (hyst[k - btm_left] == 255) {
-                edge[k] = 255;
+                edgeval = 255;
             }
         }
         // left
         if (k % width > 0) {
             if (hyst[k - 1] == 255) {
-                edge[k] = 255;
+                edgeval = 255;
             }
         }
         // right
         if (k % width > width-1) {
             if (hyst[k + 1] == 255) {
-                edge[k] = 255;
+                edgeval = 255;
             }
         }
         // bottomleft
         if (k < bounds - width && k % width > 0) {
             if (hyst[k + btm_left] == 255) {
-                edge[k] = 255;
+                edgeval = 255;
             }
         }
         // bottom
         if (k < bounds - width) {
             if (hyst[k + width] == 255) {
-                edge[k] = 255;
+                edgeval = 255;
             }
         }
         // bottomright
         if (k < bounds - width && k % width < width-1) {
             if (hyst[k + btm_right] == 255) {
-                edge[k] = 255;
+                edgeval = 255;
             }
         }
+        edge[k] = edgeval;
     } else {
         edge[k] = hyst[k];
     }
