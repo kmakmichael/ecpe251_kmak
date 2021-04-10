@@ -133,10 +133,9 @@ void gpu_suppression(float *mag, float *dir, float *supp, int height, int width)
     int bounds = width * height;
     int btm_right = width + 1;
     int btm_left = width - 1;
-    int l_bounds = blockDim.x * blockDim.y;
     int l_br = blockDim.x + 1;
     int l_bl = blockDim.x - 1;
-
+    
     // load shared mem
     Gxy[l] = mag[k];
 
@@ -150,11 +149,11 @@ void gpu_suppression(float *mag, float *dir, float *supp, int height, int width)
         // top
         if (k >= width) {
             if (local_j > 0) {
-                if (Gxy[l] < Gxy[l - blockDim.x]) {
+                if (homeval < Gxy[l - blockDim.x]) {
                     suppval = 0;
                 }
             } else {
-                if (mag[k] < mag[k - width]) {
+                if (homeval < mag[k - width]) {
                     suppval = 0;
                 }
             }
@@ -162,11 +161,11 @@ void gpu_suppression(float *mag, float *dir, float *supp, int height, int width)
         // bottom
         if (k < bounds - width) {
             if (local_j < blockDim.y-1) {
-                if (Gxy[l] < Gxy[l + blockDim.x]) {
+                if (homeval < Gxy[l + blockDim.x]) {
                     suppval = 0;
                 }
             } else {
-                if (mag[k] < mag[k + width]) {
+                if (homeval < mag[k + width]) {
                     suppval = 0;
                 }
             }
@@ -175,11 +174,11 @@ void gpu_suppression(float *mag, float *dir, float *supp, int height, int width)
         //topleft
         if (k >= width && k % width > 0) {
             if (local_j > 0 && local_i > 0) {
-                if (Gxy[l] < Gxy[l - l_br]) {
+                if (homeval < Gxy[l - l_br]) {
                     suppval = 0;
                 }
             } else {
-                if (mag[k] < mag[k - btm_right]) {
+                if (homeval < mag[k - btm_right]) {
                     suppval = 0;
                 }
             }
@@ -187,11 +186,11 @@ void gpu_suppression(float *mag, float *dir, float *supp, int height, int width)
         // bottomright
         if (k < bounds - width && k % width < width-1) {
             if (local_j < blockDim.y-1 && local_i < blockDim.x-1) {
-                if (Gxy[l] < Gxy[l + l_br]) {
+                if (homeval < Gxy[l + l_br]) {
                     suppval = 0;
                 }
             } else {
-                if (mag[k] < mag[k + btm_right]) {
+                if (homeval < mag[k + btm_right]) {
                     suppval = 0;
                 }
             }
@@ -200,11 +199,11 @@ void gpu_suppression(float *mag, float *dir, float *supp, int height, int width)
         // left
         if (k % width > 0) {
             if (local_i > 0) {
-                if (Gxy[l] < Gxy[l - 1]) {
+                if (homeval < Gxy[l - 1]) {
                     suppval = 0;
                 }
             } else {
-                if (mag[k] < mag[k - 1]) {
+                if (homeval < mag[k - 1]) {
                     suppval = 0;
                 }
             }
@@ -212,11 +211,11 @@ void gpu_suppression(float *mag, float *dir, float *supp, int height, int width)
         // right
         if (k % width < width-1) {
             if (local_i < blockDim.x-1) {
-                if (Gxy[l] < Gxy[l + 1]) {
+                if (homeval < Gxy[l + 1]) {
                     suppval = 0;
                 }
             } else {
-                if (mag[k] < mag[k + 1]) {
+                if (homeval < mag[k + 1]) {
                     suppval = 0;
                 }
             }
@@ -225,11 +224,11 @@ void gpu_suppression(float *mag, float *dir, float *supp, int height, int width)
         // topright
         if (k >= width && k % width < width-1) {
             if (local_j > 0 && local_i < blockDim.x-1) {
-                if (Gxy[l] < Gxy[l - l_bl]) {
+                if (homeval < Gxy[l - l_bl]) {
                     suppval = 0;
                 }
             } else {
-                if (mag[k] < mag[k - btm_left]) {
+                if (homeval < mag[k - btm_left]) {
                     suppval = 0;
                 }
             }
@@ -237,11 +236,11 @@ void gpu_suppression(float *mag, float *dir, float *supp, int height, int width)
         // bottomleft
         if (k < bounds - width && k % width > 0) {
             if (local_j < blockDim.y-1 && local_i > 0) {
-                if (Gxy[l] < Gxy[l + l_bl]) {
+                if (homeval < Gxy[l + l_bl]) {
                     suppval = 0;
                 }
             } else {
-                if (mag[k] < mag[k + btm_left]) {
+                if (homeval < mag[k + btm_left]) {
                     suppval = 0;
                 }
             }
