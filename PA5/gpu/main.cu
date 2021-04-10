@@ -122,70 +122,128 @@ void gpu_magdir(float *hori, float *vert, float *mag, float *dir, int height, in
 
 
 __global__
-void gpu_suppression(float *Gxy, float *dir, float *supp, int height, int width) {
+void gpu_suppression(float *mag, float *dir, float *supp, int height, int width) {
+    extern __shared__ float Gxy[];
     int i = threadIdx.x + blockIdx.x*blockDim.x;
     int j = threadIdx.y + blockIdx.y*blockDim.y; 
-    int k = i*width + j;
-    size_t bounds = width * height;
-    size_t btm_right = width + 1;
-    size_t btm_left = width - 1;
-    float suppval;    
+    int k = j*width + i;
+    int local_i = threadIdx.x;
+    int local_j = threadIdx.y;
+    int l = local_j * blockDim.x + local_i;
+    int bounds = width * height;
+    int btm_right = width + 1;
+    int btm_left = width - 1;
+    int l_bounds = blockDim.x * blockDim.y;
+    int l_br = blockDim.x + 1;
+    int l_bl = blockDim.x - 1;
 
+    // load shared mem
+    Gxy[l] = mag[k];
+
+    float homeval = mag[k];
     float theta = dir[k];
+    float suppval = mag[k];
     if (theta <= 0)
         theta += CUDART_PI_F;
     theta *= (180.0 / CUDART_PI_F);
-    suppval = Gxy[k];
     if (theta <= 22.5 || theta > 157.5) {
         // top
         if (k >= width) {
-            if (Gxy[k] < Gxy[k - width]) {
-                suppval = 0;
+            if (local_j > 0) {
+                if (Gxy[l] < Gxy[l - blockDim.x]) {
+                    suppval = 0;
+                }
+            } else {
+                if (mag[k] < mag[k - width]) {
+                    suppval = 0;
+                }
             }
         }
         // bottom
         if (k < bounds - width) {
-            if (Gxy[k] < Gxy[k + width]) {
-                suppval = 0;
+            if (local_j < blockDim.y-1) {
+                if (Gxy[l] < Gxy[l + blockDim.x]) {
+                    suppval = 0;
+                }
+            } else {
+                if (mag[k] < mag[k + width]) {
+                    suppval = 0;
+                }
             }
         }
     } else if (theta > 22.5 && theta <= 67.5) {
         //topleft
         if (k >= width && k % width > 0) {
-            if (Gxy[k] < Gxy[k - btm_right]) {
-                suppval = 0;
+            if (local_j > 0 && local_i > 0) {
+                if (Gxy[l] < Gxy[l - l_br]) {
+                    suppval = 0;
+                }
+            } else {
+                if (mag[k] < mag[k - btm_right]) {
+                    suppval = 0;
+                }
             }
         }
         // bottomright
         if (k < bounds - width && k % width < width-1) {
-            if (Gxy[k] < Gxy[k + btm_right]) {
-                suppval = 0;
+            if (local_j < blockDim.y-1 && local_i < blockDim.x-1) {
+                if (Gxy[l] < Gxy[l + l_br]) {
+                    suppval = 0;
+                }
+            } else {
+                if (mag[k] < mag[k + btm_right]) {
+                    suppval = 0;
+                }
             }
         }
     } else if (theta > 67.5 && theta <= 112.5) {
         // left
         if (k % width > 0) {
-            if (Gxy[k] < Gxy[k - 1]) {
-                suppval = 0;
+            if (local_i > 0) {
+                if (Gxy[l] < Gxy[l - 1]) {
+                    suppval = 0;
+                }
+            } else {
+                if (mag[k] < mag[k - 1]) {
+                    suppval = 0;
+                }
             }
         }       
         // right
         if (k % width < width-1) {
-            if (Gxy[k] < Gxy[k + 1]) {
-                suppval = 0;
+            if (local_i < blockDim.x-1) {
+                if (Gxy[l] < Gxy[l + 1]) {
+                    suppval = 0;
+                }
+            } else {
+                if (mag[k] < mag[k + 1]) {
+                    suppval = 0;
+                }
             }
         }
     } else if (theta > 112.5 && theta <= 157.5) {
         // topright
         if (k >= width && k % width < width-1) {
-            if (Gxy[k] < Gxy[k - btm_left]) {
-                suppval = 0;
+            if (local_j > 0 && local_i < blockDim.x-1) {
+                if (Gxy[l] < Gxy[l - l_bl]) {
+                    suppval = 0;
+                }
+            } else {
+                if (mag[k] < mag[k - btm_left]) {
+                    suppval = 0;
+                }
             }
         }
         // bottomleft
         if (k < bounds - width && k % width > 0) {
-            if (Gxy[k] < Gxy[k + btm_left]) {
-                suppval = 0;
+            if (local_j < blockDim.y-1 && local_i > 0) {
+                if (Gxy[l] < Gxy[l + l_bl]) {
+                    suppval = 0;
+                }
+            } else {
+                if (mag[k] < mag[k + btm_left]) {
+                    suppval = 0;
+                }
             }
         }
     }
@@ -417,7 +475,8 @@ int main(int argc, char *argv[]) {
     #endif
 
     // suppression
-    gpu_suppression<<<dG,dB>>>(d_mag, d_dir, d_supp, height, width);
+    memsize = sizeof(float)*blocksize*blocksize;
+    gpu_suppression<<<dG,dB,memsize>>>(d_mag, d_dir, d_supp, height, width);
     cudaDeviceSynchronize();
     #ifdef debug_mode
     gettimeofday(&stop, NULL);
@@ -489,7 +548,7 @@ int main(int argc, char *argv[]) {
     #ifndef debug_mode
     printf("%d, %0.3f\n", height, timecalc(compstart, compend)); 
     #else
-    printf("idx=%d, hi=%0.2f, lo=%0.2f\n", index, t_hi, t_lo);
+    //printf("idx=%d, hi=%0.2f, lo=%0.2f\n", index, t_hi, t_lo);
     printf("%0.3f,%0.3f,%0.3f,%0.3f,%0.3f, %0.3f, %0.3f, %0.3f\n",
         convtime,
         magdirtime,
