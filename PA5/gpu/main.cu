@@ -256,12 +256,14 @@ void gpu_hysteresis(float *hyst, float width, float t_hi, float t_lo) {
     int j = threadIdx.y + blockIdx.y*blockDim.y;
     int k = i*width+j;
 
-    if (hyst[k] >= t_hi) {
-        hyst[k] = 255.0;
-    } else if (hyst[k] <= t_lo) {
-        hyst[k] = 0.0;
-    } else {
-        hyst[k] = 125.0;
+    if (k < width * width) {
+        if (hyst[k] >= t_hi) {
+            hyst[k] = 255.0;
+        } else if (hyst[k] <= t_lo) {
+            hyst[k] = 0.0;
+        } else {
+            hyst[k] = 125.0;
+        }
     }
 }
 
