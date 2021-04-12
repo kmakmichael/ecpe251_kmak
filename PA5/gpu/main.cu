@@ -21,7 +21,7 @@
 
 #define GPU_NO 1 // 85 % 4
 #define blocksize 8
-#define conv_size 512
+#define conv_size 256
 
 //#define debug_mode
 
