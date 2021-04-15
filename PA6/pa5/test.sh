@@ -1,0 +1,8 @@
+#!/bin/bash
+##SBATCH --partition=compute	### Partition
+#SBATCH --job-name=PA5_T	    ### Job Name
+#SBATCH --time=03:00:00     	### WallTime
+#SBATCH --nodes=1          	    ### Number of Nodes
+#SBATCH --tasks-per-node=1 	    ### Number of tasks
+
+srun ./canny ~/lennas/Lenna_org_2048.pgm 0.6 > tout.csv
