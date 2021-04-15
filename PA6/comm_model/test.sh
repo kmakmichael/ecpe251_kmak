@@ -7,6 +7,6 @@
 
 rm tout.csv # clear previous results
 
-for((size=8;size<30;size++)) do
+for((size=10;size<30;size++)) do
     srun ./memcpy $size >> tout.csv
 done
