@@ -5,11 +5,11 @@
 #SBATCH --nodes=1               ### Number of Nodes
 #SBATCH --tasks-per-node=1      ### Number of tasks
 
-rm GPU_8.csv # clear previous results
+rm canny.csv # clear previous results
 
 for i in 256 512 1024 2048 4096 8192 10240
 do
     for((j=0;j<30;j++)) do
-	    srun ./canny ~/lennas/Lenna_org_$i.pgm 0.6 >> GPU_8.csv
+	    srun ./canny ~/lennas/Lenna_org_$i.pgm 0.6 >> canny.csv
     done
 done

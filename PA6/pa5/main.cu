@@ -23,7 +23,7 @@
 #define blocksize 16
 #define conv_size 256
 
-//#define debug_mode
+#define debug_mode
 
 
 void print_k(float *k, int len);
@@ -343,7 +343,7 @@ int main(int argc, char *argv[]) {
     struct timeval compstart, compend;
     #ifdef debug_mode
     struct timeval start, stop;
-    float commtime, convtime, magdirtime, supptime, sorttime, hysttime, edgetime;
+    float convtime, magdirtime, supptime, sorttime, hysttime, edgetime, htod, dtoh;
     #endif
 
     // host
@@ -423,7 +423,7 @@ int main(int argc, char *argv[]) {
     g_kern(h_hkern, sigma);
     g_deriv(h_vderiv, sigma);
     g_deriv(h_hderiv, sigma);
-
+    cudaDeviceSynchronize();
     // transfer ckernels
     #ifdef debug_mode
     gettimeofday(&start, NULL);
@@ -438,7 +438,7 @@ int main(int argc, char *argv[]) {
     cudaDeviceSynchronize();
     #ifdef debug_mode
     gettimeofday(&stop, NULL);
-    commtime = timecalc(start, stop);
+    htod = timecalc(start, stop);
     #endif
 
     cudaDeviceSynchronize();
@@ -532,7 +532,7 @@ int main(int argc, char *argv[]) {
     cudaDeviceSynchronize(); 
     #ifdef debug_mode
     gettimeofday(&stop, NULL);
-    commtime += timecalc(start, stop);
+    dtoh = timecalc(start, stop);
     #endif
 
     // computation end
@@ -540,10 +540,10 @@ int main(int argc, char *argv[]) {
 
     // write results
     #ifdef debug_mode
-    write_image_template<float>("magnitude.pgm", h_mag, width, height);
-    write_image_template<float>("direction.pgm", h_dir, width, height);
-    write_image_template<float>("suppression.pgm", h_supp, width, height);
-    write_image_template<float>("hysteresis.pgm", h_hyst, width, height);
+    //write_image_template<float>("magnitude.pgm", h_mag, width, height);
+    //write_image_template<float>("direction.pgm", h_dir, width, height);
+    //write_image_template<float>("suppression.pgm", h_supp, width, height);
+    //write_image_template<float>("hysteresis.pgm", h_hyst, width, height);
     #endif
     write_image_template<float>("out.pgm", h_img, width, height);
 
@@ -556,10 +556,10 @@ int main(int argc, char *argv[]) {
         magdirtime,
         supptime,
         sorttime,
-        hysttime,
         edgetime,
-        commtime,
-        timecalc(compstart, compend)
+        hysttime,
+        dtoh,
+        htod
     );
     #endif
 
