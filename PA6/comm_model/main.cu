@@ -54,13 +54,17 @@ int main(int argc, char *argv[]) {
     h_arr = (float *) malloc(size);
     cudaMalloc((void **)&d_arr, size);
 
+    cudaDeviceSynchronize();
     gettimeofday(&start, NULL);
     cudaMemcpy(d_arr, h_arr, size, cudaMemcpyHostToDevice); 
+    cudaDeviceSynchronize();
     gettimeofday(&end, NULL);
     htod = timecalc(start, end);
-    
+
+    cudaDeviceSynchronize();
     gettimeofday(&start, NULL);
     cudaMemcpy(h_arr, d_arr, size, cudaMemcpyDeviceToHost);
+    cudaDeviceSynchronize();
     gettimeofday(&end, NULL);
     dtoh = timecalc(start, end);
 
