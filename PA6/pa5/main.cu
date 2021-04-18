@@ -20,7 +20,7 @@
 #include "image_template.h"
 
 #define GPU_NO 1 // 85 % 4
-#define blocksize 16
+#define blocksize 32
 #define conv_size 256
 
 #define debug_mode
@@ -551,7 +551,8 @@ int main(int argc, char *argv[]) {
     printf("%d, %0.3f\n", height, timecalc(compstart, compend)); 
     #else
     //printf("idx=%d, hi=%0.2f, lo=%0.2f\n", index, t_hi, t_lo);
-    printf("%0.3f, %0.3f, %0.3f, %0.3f, %0.3f, %0.3f, %0.3f, %0.3f\n",
+    printf("%d, %0.3f, %0.3f, %0.3f, %0.3f, %0.3f, %0.3f, %0.3f, %0.3f\n",
+        width,
         convtime,
         magdirtime,
         supptime,
