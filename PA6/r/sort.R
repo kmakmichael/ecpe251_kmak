@@ -7,7 +7,7 @@ sort8 <- g8$sorttime
 sort16 <- g16$sorttime
 sort32 <- g32$sorttime
 
-images <- c(256,512,1024,2048,4096,8192,10240)  #All the images
+images <- c(256,512,1024,2048,4096,8192,10240)^2  #All the images
 
 #arrays to hold average magnitude, suppression, sorting, hysteresis, and edge linking times
 stime <- c(0,0,0,0,0,0,0)
@@ -29,7 +29,8 @@ repeat
 }
 
 xlabels <- c(1024, 4096, 8192, 10240)
-plot(images^2,stime,xlab="Image Size (px)",ylab="Sorting Time (ms)", axes=FALSE)
+
+plot(images,stime,xlab="Image Size (px)",ylab="Sorting Time (ms)", axes=FALSE)
 axis(1, at=c(-(15000^2), xlabels^2), labels=c(-(15000^2), parse(text=paste(xlabels, "^2\n"))), col.axis="black", las=0)
 axis(2, at=seq(-10,60,by=10), labels=TRUE, col.axis="black", las=2)
-sort_model <- lm(images^2 ~ stime)
+sort_model <- lm(stime ~ images)
