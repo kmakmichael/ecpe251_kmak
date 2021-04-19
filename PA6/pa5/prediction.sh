@@ -7,6 +7,7 @@
 
 rm pred_32.csv # clear previous results
 
+echo "imagesize,convtime,magtime,supptime,sorttime,edgetime,hysttime,d2htime,hd2time" > pred_32.csv
 for i in 3072 5120 7680
 do
     for((j=0;j<30;j++)) do

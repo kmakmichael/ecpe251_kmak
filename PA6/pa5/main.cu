@@ -518,15 +518,16 @@ int main(int argc, char *argv[]) {
     #ifdef debug_mode
     gettimeofday(&stop, NULL);
     edgetime = timecalc(start, stop);
+    cudaDeviceSynchronize();
     gettimeofday(&start, NULL);
     #endif
 
     // pull results
     #ifdef debug_mode 
-    cudaMemcpy(h_mag, d_mag, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_dir, d_dir, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_supp, d_supp, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_hyst, d_hyst, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
+    //cudaMemcpy(h_mag, d_mag, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
+    //cudaMemcpy(h_dir, d_dir, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
+    //cudaMemcpy(h_supp, d_supp, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
+    //cudaMemcpy(h_hyst, d_hyst, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     #endif
     cudaMemcpy(h_img, d_edge, sizeof(float)*width*height, cudaMemcpyDeviceToHost);
     cudaDeviceSynchronize(); 
