@@ -33,7 +33,6 @@ plot(sizes,h2d,xlab="Vector Size (MB)",ylab="Bandwidth (MB/s)", axes=FALSE)
 axis(1, at=c(-(2^25), 2^20*xlabels, 2^30), labels=c(-(2^25), xlabels, 2^30), col.axis="black", las=0)
 axis(2, at=ylabels*2^20, labels=ylabels*1000, col.axis="black", las=2)
 h2d_model <- lm(h2d ~ log(sizes))
-lines(sizes, exp(dhco[1]) * exp(dhco[2]*sizes), col="blue", lty=2)
 lines(sizes, predict(h2d_model, list(sizes)), col="blue", lty=2)
 
 plot(sizes,d2h,xlab="Vector Size (MB)",ylab="Bandwidth (MB/s)", axes=FALSE)
