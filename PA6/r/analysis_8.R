@@ -35,28 +35,33 @@ repeat
 
 
 xlabels <- c(256, 4096, 8192, 10240, 12000)
+tvals <- seq(0, 10240, by=128)
 
 # mag & dir
 plot(images,mtime,xlab="Image Width (px)",ylab="Magnitude & Direction Time (ms)", axes=FALSE)
 axis(1, at=c(-1000, xlabels), labels=c(-1000, xlabels), col.axis="black", las=0)
 axis(2, at=c(-1000, seq(0,50,by=5)), labels=TRUE, col.axis="black", las=2)
-mag_model <- lm(log(mtime) ~ images)
+mag_model <- lm(mtime ~ images)
+abline(mag_model, col="blue", lty=2)
 
 # suppression
 plot(images,stime,xlab="Image Width (px)",ylab="Suppression Time (ms)", axes=FALSE)
 axis(1, at=c(-1000, xlabels), labels=c(-1000, xlabels), col.axis="black", las=0)
 axis(2, at=c(-1000, seq(0,16,by=2)), labels=TRUE, col.axis="black", las=2)
-supp_model <- lm(log(stime) ~ images)
+supp_model <- lm(stime ~ images)
+abline(supp_model, col="blue", lty=2)
 
 # hysteresis
 plot(images,htime,xlab="Image Width (px)",ylab="Hysteresis Time (ms)", axes=FALSE)
 axis(1, at=c(-1000, xlabels), labels=c(-1000, xlabels), col.axis="black", las=0)
 axis(2, at=c(-1000, seq(0,50,by=5)), labels=TRUE, col.axis="black", las=2)
 hyst_model <- lm(log(htime) ~ images)
+abline(hyst_model, , col="blue", lty=2)
 
 # edge linking
 plot(images,etime,xlab="Image Width (px)",ylab="Edge Linking Time (ms)", axes=FALSE)
 axis(1, at=c(-1000, xlabels), labels=c(-1000, xlabels), col.axis="black", las=0)
 axis(2, at=c(-1000, seq(0,50,by=5)), labels=TRUE, col.axis="black", las=2)
-edge_model <- lm(log(etime) ~ images)
+edge_model <- lm(etime ~ images)
+abline(edge_model, col="blue", lty=2)
 
