@@ -40,3 +40,13 @@ axis(1, at=c(-(2^25), 2^20*xlabels, 2^30), labels=c(-(2^25), xlabels, 2^30), col
 axis(2, at=ylabels*2^20, labels=ylabels*1000, col.axis="black", las=2)
 d2h_model <- lm(d2h ~ log(sizes))
 lines(sizes, predict(d2h_model, list(sizes)), col="blue", lty=2)
+
+# times
+fls <- sizes*4
+plot(fls,htime,xlab="Vector Size (MB)",ylab="time (ms)")
+htime_model <- lm(htime ~ fls)
+lines(fls, predict(htime_model, list(fls)), col="blue", lty=2)
+
+plot(fls,dtime,xlab="Vector Size (MB)",ylab="time (ms)")
+dtime_model <- lm(dtime ~ fls)
+lines(fls, predict(dtime_model, list(fls)), col="blue", lty=2)
