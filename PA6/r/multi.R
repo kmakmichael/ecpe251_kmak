@@ -16,7 +16,7 @@ edgetime8 <- g8$edgetime
 edgetime16 <- g16$edgetime
 edgetime32 <- g32$edgetime
 
-images <- c(256,512,1024,2048,4096,8192,10240)  #All the images
+images <- c(256,512,1024,2048,4096,8192,10240)^2  #All the images
 
 #arrays to hold average magnitude, suppression, hysteresis, and edge linking times
 mtime8 <- c(0,0,0,0,0,0,0)
@@ -69,10 +69,10 @@ mylty <- 5
 mylwd <- 1.5
 
 # mag & dir
-plot(images,mtime8,pch=21,bg=col8,ylab="Magnitude & Direction Time (ms)", xlab="Image Width (px)",axes=FALSE)
+plot(images,mtime8,pch=21,bg=col8,ylab="Magnitude & Direction Time (ms)",xlab="Image Width (px)",axes=FALSE)
 points(images,mtime16, pch=22, col=col16, bg=col16)
 points(images,mtime32, pch=23, col=col32, bg=col32)
-axis(1, at=c(-1000, xlabels), labels=c(-1000, xlabels), col.axis="black", las=0)
+axis(1, at=c(-(10000^2), xlabels^2), labels=c(-1000, xlabels), col.axis="black", las=0)
 axis(2, at=c(-1000, seq(0,50,by=5)), labels=TRUE, col.axis="black", las=2)
 mag_model8 <- lm(mtime8 ~ images)
 mag_model16 <- lm(mtime16 ~ images)
@@ -83,44 +83,44 @@ lines(images, predict(mag_model32, list(images)), col=col32, lty=mylty, lwd=mylw
 legend('topleft',legend=c("8x8","16x16","32x32"),col=c(col8,col16,col32),pt.bg=c(col8,col16,col32),lty=c(mylty,mylty,mylty),pch=c(19,22,23),cex=0.9, box.lty=0)
 
 # suppression
-plot(images,stime8,pch=21,bg=col8,ylab="Suppression Time (ms)", xlab="Image Width (px)",axes=FALSE)
-points(images,stime16, pch=22, col=col16, bg=col16)
-points(images,stime32, pch=23, col=col32, bg=col32)
-axis(1, at=c(-1000, xlabels), labels=c(-1000, xlabels), col.axis="black", las=0)
-axis(2, at=c(-1000, seq(0,50,by=5)), labels=TRUE, col.axis="black", las=2)
-supp_model8 <- lm(stime8 ~ images)
-supp_model16 <- lm(stime16 ~ images)
-supp_model32 <- lm(stime32 ~ images)
-lines(images, predict(supp_model8, list(images)), col=col8, lty=mylty, lwd=mylwd)
-lines(images, predict(supp_model16, list(images)), col=col16, lty=mylty, lwd=mylwd)
-lines(images, predict(supp_model32, list(images)), col=col32, lty=mylty, lwd=mylwd)
-legend('topleft',legend=c("8x8","16x16","32x32"),col=c(col8,col16,col32),pt.bg=c(col8,col16,col32),lty=c(mylty,mylty,mylty),pch=c(19,22,23),cex=0.9, box.lty=0)
+#plot(images,stime8,pch=21,bg=col8,ylab="Suppression Time (ms)", xlab="Image Width (px)",axes=FALSE)
+#points(images,stime16, pch=22, col=col16, bg=col16)
+#points(images,stime32, pch=23, col=col32, bg=col32)
+#axis(1, at=c(-(10000^2), xlabels^2), labels=c(-1000, xlabels), col.axis="black", las=0)
+#axis(2, at=c(-1000, seq(0,50,by=5)), labels=TRUE, col.axis="black", las=2)
+#supp_model8 <- lm(stime8 ~ images)
+#supp_model16 <- lm(stime16 ~ images)
+#supp_model32 <- lm(stime32 ~ images)
+#lines(images, predict(supp_model8, list(images)), col=col8, lty=mylty, lwd=mylwd)
+#lines(images, predict(supp_model16, list(images)), col=col16, lty=mylty, lwd=mylwd)
+#lines(images, predict(supp_model32, list(images)), col=col32, lty=mylty, lwd=mylwd)
+#legend('topleft',legend=c("8x8","16x16","32x32"),col=c(col8,col16,col32),pt.bg=c(col8,col16,col32),lty=c(mylty,mylty,mylty),pch=c(19,22,23),cex=0.9, box.lty=0)
 
 # hysteresis
-plot(images,htime8,pch=21,bg=col8,ylab="Hysteresis Time (ms)", xlab="Image Width (px)",axes=FALSE)
-points(images,htime16, pch=22, col=col16, bg=col16)
-points(images,htime32, pch=23, col=col32, bg=col32)
-axis(1, at=c(-1000, xlabels), labels=c(-1000, xlabels), col.axis="black", las=0)
-axis(2, at=c(-1000, seq(0,50,by=5)), labels=TRUE, col.axis="black", las=2)
-hyst_model8 <- lm(htime8 ~ images)
-hyst_model16 <- lm(htime16 ~ images)
-hyst_model32 <- lm(htime32 ~ images)
-lines(images, predict(hyst_model8, list(images)), col=col8, lty=mylty, lwd=mylwd)
-lines(images, predict(hyst_model16, list(images)), col=col16, lty=mylty, lwd=mylwd)
-lines(images, predict(hyst_model32, list(images)), col=col32, lty=mylty, lwd=mylwd)
-legend('topleft',legend=c("8x8","16x16","32x32"),col=c(col8,col16,col32),pt.bg=c(col8,col16,col32),lty=c(mylty,mylty,mylty),pch=c(19,22,23),cex=0.9, box.lty=0)
+#plot(images,htime8,pch=21,bg=col8,ylab="Hysteresis Time (ms)", xlab="Image Width (px)",axes=FALSE)
+#points(images,htime16, pch=22, col=col16, bg=col16)
+#points(images,htime32, pch=23, col=col32, bg=col32)
+#axis(1, at=c(-(10000^2), xlabels^2), labels=c(-1000, xlabels), col.axis="black", las=0)
+#axis(2, at=c(-1000, seq(0,50,by=5)), labels=TRUE, col.axis="black", las=2)
+#hyst_model8 <- lm(htime8 ~ images)
+#hyst_model16 <- lm(htime16 ~ images)
+#hyst_model32 <- lm(htime32 ~ images)
+#lines(images, predict(hyst_model8, list(images)), col=col8, lty=mylty, lwd=mylwd)
+#lines(images, predict(hyst_model16, list(images)), col=col16, lty=mylty, lwd=mylwd)
+#lines(images, predict(hyst_model32, list(images)), col=col32, lty=mylty, lwd=mylwd)
+#legend('topleft',legend=c("8x8","16x16","32x32"),col=c(col8,col16,col32),pt.bg=c(col8,col16,col32),lty=c(mylty,mylty,mylty),pch=c(19,22,23),cex=0.9, box.lty=0)
 
 # edge linking
-plot(images,etime8,pch=21,bg=col8,ylab="Hysteresis Time (ms)", xlab="Image Width (px)",axes=FALSE)
-points(images,etime16, pch=22, col=col16, bg=col16)
-points(images,etime32, pch=23, col=col32, bg=col32)
-axis(1, at=c(-1000, xlabels), labels=c(-1000, xlabels), col.axis="black", las=0)
-axis(2, at=c(-1000, seq(0,50,by=5)), labels=TRUE, col.axis="black", las=2)
-edge_model8 <- lm(etime8 ~ images)
-edge_model16 <- lm(etime16 ~ images)
-edge_model32 <- lm(etime32 ~ images)
-lines(images, predict(edge_model8, list(images)), col=col8, lty=mylty, lwd=mylwd)
-lines(images, predict(edge_model16, list(images)), col=col16, lty=mylty, lwd=mylwd)
-lines(images, predict(edge_model32, list(images)), col=col32, lty=mylty, lwd=mylwd)
-legend('topleft',legend=c("8x8","16x16","32x32"),col=c(col8,col16,col32),pt.bg=c(col8,col16,col32),lty=c(mylty,mylty,mylty),pch=c(19,22,23),cex=0.9, box.lty=0)
+#plot(images,etime8,pch=21,bg=col8,ylab="Edge Linking Time (ms)", xlab="Image Width (px)",axes=FALSE)
+#points(images,etime16, pch=22, col=col16, bg=col16)
+#points(images,etime32, pch=23, col=col32, bg=col32)
+#axis(1, at=c(-(10000^2), xlabels^2), labels=c(-1000, xlabels), col.axis="black", las=0)
+#axis(2, at=c(-1000, seq(0,50,by=5)), labels=TRUE, col.axis="black", las=2)
+#edge_model8 <- lm(etime8 ~ images)
+#edge_model16 <- lm(etime16 ~ images)
+#edge_model32 <- lm(etime32 ~ images)
+#lines(images, predict(edge_model8, list(images)), col=col8, lty=mylty, lwd=mylwd)
+#lines(images, predict(edge_model16, list(images)), col=col16, lty=mylty, lwd=mylwd)
+#lines(images, predict(edge_model32, list(images)), col=col32, lty=mylty, lwd=mylwd)
+#legend('topleft',legend=c("8x8","16x16","32x32"),col=c(col8,col16,col32),pt.bg=c(col8,col16,col32),lty=c(mylty,mylty,mylty),pch=c(19,22,23),cex=0.9, box.lty=0)
 
