@@ -25,7 +25,7 @@ sizes <- 2^(10:29)
 d2h <- (sizes*4)/dtime
 h2d <- (sizes*4)/htime
 
-xlabels <- seq(0,600,by=100)
+xlabels <- seq(0,1000,by=100)
 ylabels <- seq(-1,4,by=0.5)
 
 
@@ -42,11 +42,17 @@ d2h_model <- lm(d2h ~ log(sizes))
 lines(sizes, predict(d2h_model, list(sizes)), col="blueviolet", lty=5)
 
 # times
-fls <- sizes*4
-#plot(fls,htime,pch=21,bg="blueviolet",col="blueviolet",xlab="Vector Size (MB)",ylab="time (ms)")
-htime_model <- lm(htime ~ fls)
-#lines(fls, predict(htime_model, list(fls)), col="blueviolet", lty=5)
+#plot(sizes,htime,pch=21,bg="blueviolet",col="blueviolet",xlab="Vector Size (MB)",ylab="time (ms)",axes=FALSE)
+#axis(1, at=c(-(2^25), 2^20*xlabels, 2^32), labels=c(-(2^25), xlabels, 2^30), col.axis="black", las=0)
+#axis(2, at=c(-100, xlabels), labels=TRUE, col.axis="black", las=2)
+htime_model <- lm(htime ~ sizes)
+#lines(sizes, predict(htime_model, list(sizes)), col="blueviolet", lty=5)
 
-#plot(fls,dtime,pch=21,bg="blueviolet",col="blueviolet",xlab="Vector Size (MB)",ylab="time (ms)")
-dtime_model <- lm(dtime ~ fls)
-#lines(fls, predict(dtime_model, list(fls)), col="blueviolet", lty=5)
+#plot(sizes,dtime,pch=21,bg="blueviolet",col="blueviolet",xlab="Vector Size (MB)",ylab="time (ms)",axes=FALSE)
+#axis(1, at=c(-(2^27), 2^20*xlabels, 2^32), labels=c(-(2^25), xlabels, 2^30), col.axis="black", las=0)
+#axis(2, at=c(-100, xlabels), labels=TRUE, col.axis="black", las=2)
+dtime_model <- lm(dtime ~ sizes)
+#lines(sizes, predict(dtime_model, list(sizes)), col="blueviolet", lty=5)
+
+h2d_predi <- predict(htime_model, data.frame(sizes = c(3072, 5120, 7680)^2))
+d2h_predi <- predict(dtime_model, data.frame(sizes = c(3072, 5120, 7680)^2))

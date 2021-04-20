@@ -54,3 +54,6 @@ lines(flops, predict(byte_model, list(flops)), col="blueviolet", lty=5)
 #axis(2, at=seq(-50,400,by=50), labels=TRUE, col.axis="black", las=2)
 conv_model <- lm(ctime ~ images)
 #lines(images, predict(conv_model, list(images)), col="blueviolet", lty=5)
+
+# prediction data
+cv_predi <- predict(conv_model, data.frame(images = c(3072, 5120, 7680)^2))
