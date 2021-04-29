@@ -1,6 +1,6 @@
 #From Cody Balos
-CC=gcc
-CCFLAGS=-Wall -std=c99
+CC=mpicxx
+CCFLAGS=-Wall
 LDFLAGS=-lm
 SOURCES=$(wildcard *.c)
 OBJECTS=$(SOURCES:.c=.o)
