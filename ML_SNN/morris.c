@@ -200,8 +200,8 @@ int main(int argc, char *argv[])
 
 			//Updating all output neurons
 			for (i=0;i<Ni;i++) {
-				if (level2_v0[i]<=30 && level2_v[i]>=30)
-					printf("v[k]=%f, k=%d,t=%f\n",level2_v[i], i,t);
+				//if (level2_v0[i]<=30 && level2_v[i]>=30)
+				//	printf("v[k]=%f, k=%d,t=%f\n",level2_v[i], i,t);
 				level2_v0[i]=level2_v[i];
 
 				m_infty =  0.5*(1+tanh((level2_v[i]-v_1)/v_2));
@@ -252,8 +252,9 @@ int main(int argc, char *argv[])
 
 	end_clock=clock();
 
-	printf("\n Time required= %f  ms \n\n",
-	(end_clock-start_clock)*1000/(CLOCKS_PER_SEC*iter));
+	printf("%d, %f\n",
+        row,
+	    (end_clock-start_clock)*1000/(CLOCKS_PER_SEC*iter));
 
 	return 0;
 }//end of main
