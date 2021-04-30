@@ -214,11 +214,12 @@ int main(int argc, char *argv[])
             MPI_Bcast(&firings, 1, MPI_INT, 0, MPI_COMM_WORLD);
 		    if (firings > 8) {
                 if (!comm_rank) {
-                    memcpy(&L1_f[1], &L1_firings[1], L1_N_firings);
+                    memcpy(&L1_f[1], &L1_firings[1], l1_n_arr[0]);
                     int fsum =  L1_N_firings;
                     for(int r = 1; r < comm_size; r++) {
                         MPI_Status st;
                         MPI_Recv(&L1_f[fsum], l1_n_arr[r], MPI_INT, r, r, MPI_COMM_WORLD, &st);
+                        fsum += l1_n_arr[r];
                     }
                 } else {
                     MPI_Send(&L1_firings[1], L1_firings[0], MPI_INT, 0, comm_rank, MPI_COMM_WORLD);
@@ -267,7 +268,7 @@ int main(int argc, char *argv[])
 			//Upgrading all the input neurons
 			for (i=0;i<r_Ne;i++) {
 				if ((level1_v0[i]<=30) && (level1_v[i]>=30)) {
-					L1_firings[L1_N_firings]=i;
+					L1_firings[L1_N_firings]=i+comm_rank*r_Ne;
 					L1_N_firings++;
 				}
 				level1_v0[i]=level1_v[i];
