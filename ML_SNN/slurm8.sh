@@ -9,6 +9,6 @@ for i in 240 480 960 1200 1440 1680 2160 2400
 do
     for ((j=0;j<30;j++))
     do
-        srun ./snn_morris $i 1 >> parallel_8.txt
+        srun ./snn_morris $i 1 >> parallel_8.csv
     done
 done
